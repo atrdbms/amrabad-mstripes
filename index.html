@@ -403,7 +403,7 @@ $("#up").onkeydown=e=>{if(e.key=="Enter"||e.key==" "){e.preventDefault();$("#fil
 render();
 /* ---- Live sync with Google Sheet ---- */
 const BUILD="v18 · 18 Nov 2026",SHEET_ID="1TYnTFCx0BiQYlaupeiTu2tK5TpNIPA4FTTgSgzCbVHA",GID="0",REFRESH_HOURS=24;
-const PUB_URL="https://docs.google.com/spreadsheets/d/e/2PACX-1vT_-qn3XCA-eJkPGThRZBns84mn5w7kHoFeOkAXJ4DUS04hDfHwBn1fZ-l39aXnFDKVG4xBBogIW4So/pub?output=csv";
+const PUB_URL="https://docs.google.com/spreadsheets/d/e/2PACX-1vT_-qn3XCA-eJkPGThRZBns84mn5w7kHoFeOkAXJ4DUS04hDfHwBn1fZ-l39aXnFDKVG4xBBogIW4So/pub?gid=0&single=true&output=csv";
 const SOURCES=[["published link",PUB_URL],["sheet export","https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/export?format=csv&gid="+GID],["sheet query","https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/gviz/tq?tqx=out:csv&headers=1&gid="+GID]].filter(s=>s[1]);
 let busy=false,loaded=false;
 async function getText(u,label){const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),240000);
