@@ -126,7 +126,7 @@ footer .wrap{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-con
 
 <section id="mapsec"><h2 class="sec">Wildlife sign map</h2>
 <div class="card"><div class="mapbar"><label class="f" style="display:flex;align-items:center;gap:8px">Base map <select id="bm" style="margin:0;width:auto"><option value="gsat">Google Satellite</option><option value="ghyb">Google Satellite with place names</option><option value="sat">Esri Satellite</option><option value="hyb">Esri Satellite with place names</option><option value="st">Esri Street map</option></select></label><span class="note">Drag to move, scroll or use + / − to zoom. Hover a point for details.</span></div>
-<div class="seg" style="margin:8px 0"><label class="btn alt" style="cursor:pointer">Add KML / KMZ layer<input type="file" id="kmlf" accept=".kml,.kmz,.xml" multiple hidden></label><button class="btn alt" id="kmlc">Clear all KML</button><span class="note" id="kmlmsg"></span></div>
+<div class="seg" style="margin:8px 0"><label class="btn alt" style="cursor:pointer">Add KML / KMZ layer<input type="file" id="kmlf" accept=".kml,.kmz,.xml" multiple hidden></label><label style="display:inline-flex;gap:6px;align-items:center;font-weight:600;cursor:pointer"><input type="checkbox" id="kon">Superimpose KML tracks from sheet (column “kml”)</label><button class="btn alt" id="kall" hidden>Load all</button><button class="btn alt" id="kmlc">Clear all KML</button><span class="note" id="kmlmsg"></span></div>
 <div id="lyr" style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px"></div>
 <div style="position:relative"><canvas id="map" style="width:100%;height:clamp(380px,64vh,660px);display:block;background:#1b2a22;border:1px solid var(--line);touch-action:none;cursor:grab" role="img" aria-label="Satellite map of wildlife sign locations. Hover a point for details."></canvas>
 <div class="mctl"><button id="zi" aria-label="Zoom in">+</button><button id="zo" aria-label="Zoom out">&minus;</button><button id="zf" aria-label="Fit to records" title="Fit to records">&#9974;</button></div>
@@ -259,7 +259,9 @@ $("#bm").onchange=redraw;window.addEventListener("resize",redraw)})();
 let KL=[],OL=[],OFF=null,KTOK=0;const KC=new Map();
 const DR2=d=>DR(d),okey=r=>r.division+"|"+r.range+"|"+r.name;
 const kmlUrls=s=>{const o=[];(String(s||"").match(/https?:\/\/[^\s,;"'<>]+/g)||[]).forEach(u=>{if(!o.includes(u))o.push(u)});return o};
-const kmlFetchUrl=u=>{const m=u.match(/drive\.google\.com\/file\/d\/([\w-]+)/)||u.match(/drive\.google\.com\/(?:open|uc)\?(?:[^#]*&)?id=([\w-]+)/);return m?"https://drive.google.com/uc?export=download&id="+m[1]:u};
+const GDRIVE_API_KEY="";/* optional: Google API key (Drive API enabled) so Drive-hosted KML files can be read by the browser */
+const kmlFetchUrl=u=>{const m=u.match(/drive\.google\.com\/file\/d\/([\w-]+)/)||u.match(/drive\.google\.com\/(?:open|uc)\?(?:[^#]*&)?id=([\w-]+)/);return m?(GDRIVE_API_KEY?"https://www.googleapis.com/drive/v3/files/"+m[1]+"?alt=media&key="+GDRIVE_API_KEY:"https://drive.google.com/uc?export=download&id="+m[1]):u};
+const kmlSrc=s=>{s=String(s||"");return /<coordinates/i.test(s)?[s.trim()]:kmlUrls(s)};
 function kmlAttrs(pm,label){const g=n=>pm.getElementsByTagName(n)[0]?.textContent||"";const rows=[];
 for(const e of pm.getElementsByTagName("Data")){const v=e.getElementsByTagName("value")[0];rows.push([e.getAttribute("name")||"",v?v.textContent.trim():""])}
 for(const e of pm.getElementsByTagName("SimpleData"))rows.push([e.getAttribute("name")||"",e.textContent.trim()]);
@@ -287,12 +289,24 @@ pop.innerHTML='<button id="kpx" aria-label="Close" style="float:right;border:0;b
 pop.style.display="block";$("#kpx").onclick=()=>{pop.style.display="none";KSEL=null;redraw()}}
 function kmlFit(src){const A=[];(src||allFeat()).forEach(k=>k.p.forEach(q=>A.push({nx:q[0],ny:q[1]})));if(A.length){fitMap(A);const z=MV.z;if(z>16)MV.z=16}redraw()}
 function kmlNote(h){$("#kpop").style.display="none";KSEL=null;$("#kmlmsg").innerHTML=h}
-async function loadKMLs(urls){const tok=++KTOK;KL=[];redraw();if(!urls.length){kmlNote("No KML link found for this officer in the sheet.");return}
-kmlNote("Loading KML…");const fails=[];let ok=0;
-await Promise.all(urls.map(async u=>{try{let a=KC.get(u);if(!a){const r=await fetch(kmlFetchUrl(u),{cache:"no-store"});if(!r.ok)throw new Error(r.status);a=parseKML(await r.text());KC.set(u,a)}if(tok!==KTOK)return;a.forEach(x=>KL.push(x));ok++}catch(e){fails.push(u)}}));
+async function loadKMLs(urls,opt){opt=opt||{};const tok=++KTOK;KL=[];redraw();if(!urls.length){kmlNote(opt.sheet?"No KML links found in the sheet for the current filters.":"No KML link found for this officer in the sheet.");return}
+const total=urls.length,fails=[];let ok=0,done=0,i=0,last=0;kmlNote("Loading KML… 0 of "+total);
+const one=async u=>{let a=KC.get(u);if(!a){let tx;if(u[0]=="<")tx=u;else{const r=await fetch(kmlFetchUrl(u),{cache:"no-store"});if(!r.ok)throw new Error(r.status);const bf=await r.arrayBuffer(),v=new Uint8Array(bf);tx=v[0]==0x50&&v[1]==0x4B?await readKMZ(bf):new TextDecoder().decode(bf)}a=parseKML(tx);KC.set(u,a)}return a};
+const work=async()=>{while(i<urls.length&&tok===KTOK){const u=urls[i++];try{const a=await one(u);if(tok!==KTOK)return;a.forEach(x=>KL.push(x));ok++}catch(e){fails.push(u)}done++;if(tok===KTOK&&Date.now()-last>400){last=Date.now();kmlNote("Loading KML… "+done+" of "+total);redraw()}}};
+await Promise.all(Array.from({length:Math.min(6,total)},work));
 if(tok!==KTOK)return;
-kmlNote((ok?"KML tracks shown on the map ("+ok+" of "+urls.length+" files)":"KML could not be read here")+(fails.length?'. Could not read: '+fails.map((u,i)=>'<a href="'+esc(u)+'" target="_blank" rel="noopener">link '+(i+1)+'</a>').join(", ")+'. Google Drive links must be shared as “Anyone with the link”; otherwise download the file and use “Add KML / KMZ layer”.':""));
-if(KL.length)kmlFit()}
+const fl=fails.filter(u=>u[0]!="<").slice(0,3);
+kmlNote((ok?"KML tracks shown on the map ("+ok+" of "+total+" files)":"KML could not be read here")+(opt.note?" · "+opt.note:"")+(fails.length?'. '+fails.length+' could not be read'+(fl.length?' (e.g. '+fl.map((u,j)=>'<a href="'+esc(u)+'" target="_blank" rel="noopener">link '+(j+1)+'</a>').join(", ")+')':"")+'. Files must be shared as “Anyone with the link”, and Google Drive may block direct reading by the browser; use “Add KML / KMZ layer” for those files.':""));
+if(opt.fit!==false&&KL.length)kmlFit();else redraw()}
+/* ---- KML tracks from the sheet column "kml", superimposed on the map ---- */
+let KON=false,KMAX=300,kTimer=0;
+function kmlSync(fit){if(!KON||OFF)return;const src=CUR.P.concat(CUR.S).slice().sort((a,b)=>dkey(b).localeCompare(dkey(a))),seen=new Set(),urls=[];
+for(const r of src)for(const u of kmlSrc(r.kml))if(!seen.has(u)){seen.add(u);urls.push(u)}
+const n=urls.length,use=urls.slice(0,KMAX);$("#kall").hidden=n<=KMAX;
+loadKMLs(use,{sheet:1,fit,note:n>KMAX?"latest "+KMAX+" of "+n+" files; narrow the filters or press “Load all”":""})}
+function kmlSyncSoon(){clearTimeout(kTimer);kTimer=setTimeout(()=>kmlSync(false),700)}
+$("#kon").onchange=e=>{KON=e.target.checked;if(KON)kmlSync(true);else{KTOK++;KL=[];kmlNote("");$("#kall").hidden=true;redraw()}};
+$("#kall").onclick=()=>{KMAX=1e9;kmlSync(true)};
 let LY=[];const PAL=["#00E5FF","#FF4081","#76FF03","#FFAB40","#B388FF","#FF5252","#18FFFF","#F4FF81"];
 const allFeat=()=>{const o=KL.slice();LY.forEach(l=>{if(l.vis)l.f.forEach(k=>o.push(k))});return o},colOf=k=>k.col||"#FFE600";
 async function readKMZ(buf){const v=new DataView(buf);let e=-1;for(let i=buf.byteLength-22;i>=Math.max(0,buf.byteLength-70000);i--)if(v.getUint32(i,true)==0x06054b50){e=i;break}if(e<0)throw new Error("not a zip");
@@ -308,7 +322,7 @@ $("#kmlf").onchange=async e=>{const fs=[...e.target.files];e.target.value="";if(
 for(const f of fs){try{const tx=/\.kmz$/i.test(f.name)?await readKMZ(await f.arrayBuffer()):await f.text(),ft=parseKML(tx);if(!ft.length)throw new Error("empty");const col=PAL[LY.length%PAL.length];ft.forEach(k=>k.col=col);const l={name:f.name.replace(/\.(kml|kmz|xml)$/i,""),col,vis:true,f:ft};LY.push(l);added.push(l)}catch(x){bad.push(f.name)}}
 renderLayers();kmlNote((added.length?added.map(l=>esc(l.name)+" ("+l.f.length+" features)").join(", ")+" added to the map. Click any feature to see its attributes.":"")+(bad.length?" Could not read: "+bad.map(esc).join(", ")+" (needs a valid KML or KMZ with coordinates).":""));
 if(added.length)kmlFit(added.flatMap(l=>l.f))};
-$("#kmlc").onclick=()=>{KTOK++;KL=[];LY=[];renderLayers();kmlNote("");redraw()};
+$("#kmlc").onclick=()=>{KTOK++;KL=[];LY=[];KON=false;$("#kon").checked=false;$("#kall").hidden=true;renderLayers();kmlNote("");redraw()};
 function officers(P,S){const o=new Map(),get=r=>{const k=okey(r);let e=o.get(k);if(!e){e={k,division:r.division,range:r.range,name:r.name,desig:"",p:0,km:0,s:0,d:new Set()};o.set(k,e)}if(r.desig&&!e.desig)e.desig=r.desig;return e};
 P.forEach(r=>{if(r.name){const e=get(r);e.p++;e.km+=r.dist;e.d.add(dkey(r)||r.date)}});S.forEach(r=>{if(r.name)get(r).s++});
 OL=[...o.values()].sort((a,b)=>a.division.localeCompare(b.division)||a.range.localeCompare(b.range)||DR(a.desig)-DR(b.desig)||a.name.localeCompare(b.name));
@@ -339,17 +353,17 @@ const km=Pr.reduce((a,r)=>a+r.dist,0),tg=Sr.filter(r=>grp(r.animal)=="t").length
 const ym={};Pr.forEach(r=>{const k=(r.year||"")+" "+(MN[r.mi-1]||"");(ym[k]=ym[k]||{p:0,km:0,s:0,d:new Set()}).p++;ym[k].km+=r.dist;ym[k].d.add(dkey(r)||r.date)});Sr.forEach(r=>{const k=(r.year||"")+" "+(MN[r.mi-1]||"");(ym[k]=ym[k]||{p:0,km:0,s:0,d:new Set()}).s++});
 const mk=Object.keys(ym).sort((a,b)=>{const f=k=>{const[y,m]=k.split(" ");return (y||"0")+String(MN.indexOf(m)+1).padStart(2,"0")};return f(a)<f(b)?-1:1});
 const bt={};Pr.forEach(r=>{(bt[r.beat]=bt[r.beat]||{p:0,km:0,s:0,d:new Set()}).p++;bt[r.beat].km+=r.dist;bt[r.beat].d.add(dkey(r)||r.date)});Sr.forEach(r=>{(bt[r.beat]=bt[r.beat]||{p:0,km:0,s:0,d:new Set()}).s++});
-const urls=[];Pr.concat(Sr).forEach(r=>kmlUrls(r.kml).forEach(u=>{if(!urls.includes(u))urls.push(u)}));
+const urls=[];Pr.concat(Sr).forEach(r=>kmlSrc(r.kml).forEach(u=>{if(!urls.includes(u))urls.push(u)}));
 const pl=Pr.slice().sort((a,b)=>dkey(b).localeCompare(dkey(a))).slice(0,200),sl=Sr.slice().sort((a,b)=>dkey(b).localeCompare(dkey(a))).slice(0,200);
 const h=`<div class="card" style="margin-top:14px"><div class="seg" style="justify-content:space-between"><h3 style="margin:0">${esc(e.name)}${e.desig?", "+esc(e.desig):""} <span class="note">· ${esc(e.division)} · ${esc(e.range)}</span></h3><span class="seg" style="margin:0"><button class="btn alt" id="odmap">Show on map</button><button class="btn alt" id="odx">Close</button></span></div>
 <div class="kp"><div><b>${Pr.length.toLocaleString()}</b><span>Patrols</span></div><div><b>${km.toLocaleString(undefined,{maximumFractionDigits:1})}</b><span>Kilometres walked</span></div><div><b>${Sr.length.toLocaleString()}</b><span>Observations</span></div><div><b>${tg.toLocaleString()}</b><span>Tiger signs</span></div><div><b>${beats}</b><span>Beats covered</span></div><div><b>${days}</b><span>No of days patrolled</span></div></div>
-<p class="note">${urls.length?"KML links in the sheet: "+urls.map((u,i)=>'<a href="'+esc(u)+'" target="_blank" rel="noopener">KML '+(i+1)+'</a>').join(" · "):"No KML link found for this officer in the sheet."}</p>
+<p class="note">${urls.length?"KML links in the sheet: "+urls.filter(u=>u[0]!="<").map((u,i)=>'<a href="'+esc(u)+'" target="_blank" rel="noopener">KML '+(i+1)+'</a>').join(" · "):"No KML link found for this officer in the sheet."}</p>
 <div class="two" style="margin-top:12px"><div><h3>Distance walked per month (km)</h3>${svgCols(mk.map(mlab),mk.map(k=>ym[k].km),"#11452D")}</div><div><h3>Top animal sightings</h3>${svgH(cnt(Sr,r=>r.animal),"#B4452A")}</div></div>
 <div class="two" style="margin-top:12px"><div><h3>Animal-wise observations</h3>${mini(["Animal","Count"],cnt(Sr,r=>r.animal).map(([a,n])=>[esc(a),n]))}</div><div><h3>Observation type</h3>${mini(["Observation","Count"],cnt(Sr,r=>r.sign).map(([a,n])=>[esc(a),n]))}</div></div>
 <div class="two" style="margin-top:12px"><div><h3>Month-wise</h3>${mini(["Month","Patrols","No of days patrolled","Km","Observations"],mk.map(k=>[esc(k.trim()||"No date"),ym[k].p,ym[k].d.size,ym[k].km.toFixed(1),ym[k].s]))}</div><div><h3>Beat-wise</h3>${mini(["Beat","Patrols","No of days patrolled","Km","Observations"],Object.entries(bt).sort((a,b)=>b[1].p+b[1].s-a[1].p-a[1].s).map(([k,v])=>[esc(k),v.p,v.d.size,v.km.toFixed(1),v.s]))}</div></div>
 <div class="two" style="margin-top:12px"><div><h3>Patrol records${Pr.length>200?" (latest 200)":""}</h3>${mini(["Date","Beat","Km"],pl.map(r=>[esc(r.date),esc(r.beat),r.dist.toFixed(3)]))}</div><div><h3>Observation records${Sr.length>200?" (latest 200)":""}</h3>${mini(["Date","Animal","Observation","Age"],sl.map(r=>[esc(r.date),esc(r.animal),esc(r.sign),esc(r.age)]))}</div></div></div>`;return{e,h,urls,Pr,Sr,km}}
 function showOfficer(fresh){const b=offBuild(OFF);if(!b)return;$("#od").innerHTML=b.h;const urls=b.urls;
-$("#odx").onclick=()=>{OFF=null;$("#od").innerHTML="";KTOK++;KL=[];kmlNote("");redraw()};
+$("#odx").onclick=()=>{OFF=null;$("#od").innerHTML="";KTOK++;KL=[];kmlNote("");redraw();if(KON)kmlSync(true)};
 $("#odmap").onclick=()=>$("#mapsec").scrollIntoView({behavior:"smooth"});
 if(fresh){$("#od").scrollIntoView({behavior:"smooth",block:"start"});loadKMLs(urls)}}
 
@@ -404,7 +418,7 @@ const P=rows.filter(r=>r.dist>0&&m(r,["animal","sign"])),S=rows.filter(r=>r.anim
 const km=P.reduce((a,r)=>a+r.dist,0),tg=S.filter(r=>grp(r.animal)=="t").length;
 $("#stats").innerHTML=[[P.length.toLocaleString(),"Patrols"],[pdays(P).toLocaleString(),"No of days patrolled"],[km.toLocaleString(undefined,{maximumFractionDigits:1}),"Kilometres walked"],[S.length.toLocaleString(),"Wildlife signs"],[tg.toLocaleString(),"Tiger signs","t"],[new Set(P.map(r=>r.name)).size,"Officers on patrol"],[new Set(P.map(r=>r.beat)).size,"Beats covered"]].map(([a,b,c])=>`<div class="stat ${c||""}"><b>${a}</b><span>${b}</span></div>`).join("");
 drawMap(S);trends(P,S);bars("#bStaff",sum(P,r=>r.name+(r.desig?", "+r.desig:"")));bars("#bBeat",sum(P,r=>r.beat));
-CUR={S:S,P:P,A:rows.filter(r=>r.animal?m(r):(r.dist>0&&m(r,["animal","sign"])))};renderTable();officers(P,S)}
+CUR={S:S,P:P,A:rows.filter(r=>r.animal?m(r):(r.dist>0&&m(r,["animal","sign"])))};renderTable();officers(P,S);if(KON&&!OFF)kmlSyncSoon()}
 function rowHtml(r){const sg=!!r.animal;let c=[esc(r.date)];
 if(view=="A")c.push(sg?"Wildlife sign":"Patrol");
 c.push(esc(r.division),esc(r.range),esc(r.beat),esc(r.name)+(view!="P"&&r.desig?", "+esc(r.desig):""));
@@ -429,7 +443,7 @@ $("#reset").onclick=()=>{F.forEach(([k])=>$("#f_"+k).value="");render()};
 const st=$("#status");st.textContent="Connecting to Google Sheet…";
 render();
 /* ---- Live sync with Google Sheet ---- */
-const BUILD="v21 · 18 Nov 2026",SHEET_ID="1TYnTFCx0BiQYlaupeiTu2tK5TpNIPA4FTTgSgzCbVHA",GID="0",REFRESH_HOURS=24;
+const BUILD="v22 · 18 Nov 2026",SHEET_ID="1TYnTFCx0BiQYlaupeiTu2tK5TpNIPA4FTTgSgzCbVHA",GID="0",REFRESH_HOURS=24;
 const PUB_URL="https://docs.google.com/spreadsheets/d/e/2PACX-1vT_-qn3XCA-eJkPGThRZBns84mn5w7kHoFeOkAXJ4DUS04hDfHwBn1fZ-l39aXnFDKVG4xBBogIW4So/pub?output=csv";
 const SOURCES=[["published link",PUB_URL],["sheet export","https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/export?format=csv&gid="+GID],["sheet query","https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/gviz/tq?tqx=out:csv&headers=1&gid="+GID]].filter(s=>s[1]);
 let busy=false,loaded=false;
