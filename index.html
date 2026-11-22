@@ -259,9 +259,11 @@ $("#bm").onchange=redraw;window.addEventListener("resize",redraw)})();
 let KL=[],OL=[],OFF=null,KTOK=0;const KC=new Map();
 const DR2=d=>DR(d),okey=r=>r.division+"|"+r.range+"|"+r.name;
 const kmlUrls=s=>{const o=[];(String(s||"").match(/https?:\/\/[^\s,;"'<>]+/g)||[]).forEach(u=>{if(!o.includes(u))o.push(u)});return o};
+const KML_PROXY="";/* optional: Apps Script web-app address that serves Google Drive KML files */
+const KML_BASE="kml/";/* folder in this GitHub site that holds KML files named in the sheet */
 const GDRIVE_API_KEY="";/* optional: Google API key (Drive API enabled) so Drive-hosted KML files can be read by the browser */
-const kmlFetchUrl=u=>{const m=u.match(/drive\.google\.com\/file\/d\/([\w-]+)/)||u.match(/drive\.google\.com\/(?:open|uc)\?(?:[^#]*&)?id=([\w-]+)/);return m?(GDRIVE_API_KEY?"https://www.googleapis.com/drive/v3/files/"+m[1]+"?alt=media&key="+GDRIVE_API_KEY:"https://drive.google.com/uc?export=download&id="+m[1]):u};
-const kmlSrc=s=>{s=String(s||"");return /<coordinates/i.test(s)?[s.trim()]:kmlUrls(s)};
+const kmlFetchUrl=u=>{const m=u.match(/drive\.google\.com\/file\/d\/([\w-]+)/)||u.match(/drive\.google\.com\/(?:open|uc)\?(?:[^#]*&)?id=([\w-]+)/);return m?(KML_PROXY?KML_PROXY+"?id="+m[1]:GDRIVE_API_KEY?"https://www.googleapis.com/drive/v3/files/"+m[1]+"?alt=media&key="+GDRIVE_API_KEY:"https://drive.google.com/uc?export=download&id="+m[1]):u};
+const kmlSrc=s=>{s=String(s||"");if(/<coordinates/i.test(s))return[s.trim()];const o=kmlUrls(s);s.split(/[\s,;|]+/).forEach(w=>{if(/^[^\s"'<>:]+\.(kml|kmz)$/i.test(w)){const u=KML_BASE+w.replace(/^\.?\/+/,"").split("/").map(encodeURIComponent).join("/");if(!o.includes(u))o.push(u)}});return o};
 function kmlAttrs(pm,label){const g=n=>pm.getElementsByTagName(n)[0]?.textContent||"";const rows=[];
 for(const e of pm.getElementsByTagName("Data")){const v=e.getElementsByTagName("value")[0];rows.push([e.getAttribute("name")||"",v?v.textContent.trim():""])}
 for(const e of pm.getElementsByTagName("SimpleData"))rows.push([e.getAttribute("name")||"",e.textContent.trim()]);
@@ -291,7 +293,7 @@ function kmlFit(src){const A=[];(src||allFeat()).forEach(k=>k.p.forEach(q=>A.pus
 function kmlNote(h){$("#kpop").style.display="none";KSEL=null;$("#kmlmsg").innerHTML=h}
 async function loadKMLs(urls,opt){opt=opt||{};const tok=++KTOK;KL=[];redraw();if(!urls.length){kmlNote(opt.sheet?"No KML links found in the sheet for the current filters.":"No KML link found for this officer in the sheet.");return}
 const total=urls.length,fails=[];let ok=0,done=0,i=0,last=0;kmlNote("Loading KML… 0 of "+total);
-const one=async u=>{let a=KC.get(u);if(!a){let tx;if(u[0]=="<")tx=u;else{const r=await fetch(kmlFetchUrl(u),{cache:"no-store"});if(!r.ok)throw new Error(r.status);const bf=await r.arrayBuffer(),v=new Uint8Array(bf);tx=v[0]==0x50&&v[1]==0x4B?await readKMZ(bf):new TextDecoder().decode(bf)}a=parseKML(tx);KC.set(u,a)}return a};
+const one=async u=>{let a=KC.get(u);if(!a){let tx;if(u[0]=="<")tx=u;else{const r=await fetch(kmlFetchUrl(u),{cache:"no-store"});if(!r.ok)throw new Error(r.status);const bf=await r.arrayBuffer(),v=new Uint8Array(bf);if(v[0]==0x4B&&v[1]==0x4D&&v[2]==0x5A&&v[3]==0x42){const bin=atob(new TextDecoder().decode(v.slice(7)).trim()),u8=Uint8Array.from(bin,c=>c.charCodeAt(0));tx=await readKMZ(u8.buffer)}else tx=v[0]==0x50&&v[1]==0x4B?await readKMZ(bf):new TextDecoder().decode(bf)}a=parseKML(tx);KC.set(u,a)}return a};
 const work=async()=>{while(i<urls.length&&tok===KTOK){const u=urls[i++];try{const a=await one(u);if(tok!==KTOK)return;a.forEach(x=>KL.push(x));ok++}catch(e){fails.push(u)}done++;if(tok===KTOK&&Date.now()-last>400){last=Date.now();kmlNote("Loading KML… "+done+" of "+total);redraw()}}};
 await Promise.all(Array.from({length:Math.min(6,total)},work));
 if(tok!==KTOK)return;
@@ -443,7 +445,7 @@ $("#reset").onclick=()=>{F.forEach(([k])=>$("#f_"+k).value="");render()};
 const st=$("#status");st.textContent="Connecting to Google Sheet…";
 render();
 /* ---- Live sync with Google Sheet ---- */
-const BUILD="v22 · 18 Nov 2026",SHEET_ID="1TYnTFCx0BiQYlaupeiTu2tK5TpNIPA4FTTgSgzCbVHA",GID="0",REFRESH_HOURS=24;
+const BUILD="v23 · 18 Nov 2026",SHEET_ID="1TYnTFCx0BiQYlaupeiTu2tK5TpNIPA4FTTgSgzCbVHA",GID="0",REFRESH_HOURS=24;
 const PUB_URL="https://docs.google.com/spreadsheets/d/e/2PACX-1vT_-qn3XCA-eJkPGThRZBns84mn5w7kHoFeOkAXJ4DUS04hDfHwBn1fZ-l39aXnFDKVG4xBBogIW4So/pub?output=csv";
 const SOURCES=[["published link",PUB_URL],["sheet export","https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/export?format=csv&gid="+GID],["sheet query","https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/gviz/tq?tqx=out:csv&headers=1&gid="+GID]].filter(s=>s[1]);
 let busy=false,loaded=false;
