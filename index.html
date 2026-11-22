@@ -145,7 +145,7 @@ footer .wrap{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-con
 
 
 <section id="records"><h2 class="sec">Records</h2>
-<div class="seg"><button class="btn on" id="vA">All records</button><button class="btn alt" id="vS">Wildlife signs</button><button class="btn alt" id="vP">Patrols</button></div>
+<div class="seg"><button class="btn on" id="vA">All records</button><button class="btn alt" id="vS">Wildlife signs</button><button class="btn alt" id="vP">Patrols</button><button class="btn alt" id="vM">Range Maps</button></div>
 <div class="tw"><table><thead id="th"></thead><tbody id="tb"></tbody></table></div>
 <p class="note" id="mapnote" style="margin:8px 0 0"></p>
 <div class="seg" style="margin-top:10px"><button class="btn alt" id="pv">Previous 100</button><button class="btn alt" id="pn">Next 100</button><span class="note" id="pinfo"></span></div>
@@ -393,8 +393,8 @@ const stamp=()=>new Date().toISOString().slice(0,10);
 $("#rxls").onclick=()=>{const{P,S,fl}=repData(),L=offAgg(P,S);let tp=0,tk=0,ts=0;
 const out=[["MStripes Field Monitoring Database – Amrabad Tiger Reserve"],["Filters: "+fl],[],["Sl.No","Division","Range","Name with designation","Total Patrols count","No of days patrolled","Total Patrolled in Km","No. of observations"]];
 L.forEach((e,i)=>{tp+=e.p;tk+=e.km;ts+=e.s;out.push([i+1,e.division,e.range,e.name+(e.desig?", "+e.desig:""),e.p,e.d.size,e.km.toFixed(1),e.s])});out.push(["","","","Total",tp,pdays(P),tk.toFixed(1),ts]);dl("MStripes_officer_report_"+stamp()+".csv",out)};
-$("#rrec").onclick=()=>{const{P,S}=repData(),h=["Date","Year","Month","Division","Range","Beat","Name","Designation","Record type","Patrol distance (km)","Animal sighting","Observation","Track age","Latitude","Longitude","KML link","Range map"];
-const f=(r,ty)=>[r.date,r.year,r.month,r.division,r.range,r.beat,r.name,r.desig,ty,ty=="Patrol"?r.dist:"",r.animal,r.sign,r.age,isFinite(r.lat)?r.lat:"",isFinite(r.lon)?r.lon:"",r.kml,(mapFor(r)||{n:""}).n];
+$("#rrec").onclick=()=>{const{P,S}=repData(),h=["Date","Year","Month","Division","Range","Beat","Name","Designation","Record type","Patrol distance (km)","Animal sighting","Observation","Track age","Latitude","Longitude","KML link"];
+const f=(r,ty)=>[r.date,r.year,r.month,r.division,r.range,r.beat,r.name,r.desig,ty,ty=="Patrol"?r.dist:"",r.animal,r.sign,r.age,isFinite(r.lat)?r.lat:"",isFinite(r.lon)?r.lon:"",r.kml];
 dl("MStripes_records_"+stamp()+".csv",[h].concat(P.map(r=>f(r,"Patrol")),S.map(r=>f(r,"Wildlife sign"))))};
 const gt=(h,rows,ra=[])=>`<div class="tw"><table><thead><tr>${h.map((x,i)=>`<th${ra.includes(i)?' class="r"':''}>${x}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr${r.tot?' class="tot"':''}>${r.c.map((x,i)=>`<td${ra.includes(i)?' class="r"':''}>${x}</td>`).join("")}</tr>`).join("")||'<tr><td class="note">None</td></tr>'}</tbody></table></div>`;
 $("#rpdf").onclick=()=>{const{P,S,fl}=repData(),L=offAgg(P,S),km=P.reduce((a,r)=>a+r.dist,0),tg=S.filter(r=>grp(r.animal)=="t").length;
@@ -435,29 +435,33 @@ else{const t=grp(r.animal)=="t",f=/fresh/i.test(r.age)&&!/old/i.test(r.age);
 c.push(sg?(t?'<span class="tag t">Tiger</span>':esc(r.animal)):"–",sg?esc(r.sign):"–",sg&&r.age?`<span class="tag ${f?"f":""}">${esc(r.age)}</span>`:"–");
 if(view=="A")c.push(sg?"–":r.dist.toFixed(3));
 c.push(sg&&isFinite(r.lat)?r.lat.toFixed(4)+", "+r.lon.toFixed(4):"–")}
-const mp=mapFor(r);c.push(mp?`<a href="#" class="mapl" data-id="${esc(mp.id)}" data-n="${esc(mp.n)}" data-t="${esc(mp.t)}">View map</a>`:"–");
 return"<tr>"+c.map(x=>"<td>"+x+"</td>").join("")+"</tr>"}
-function renderTable(){const PS=100,L=CUR[view],n=L.length,pages=Math.max(1,Math.ceil(n/PS));pg=Math.min(Math.max(pg,0),pages-1);
-["A","S","P"].forEach(k=>$("#v"+k).className="btn "+(view==k?"on":"alt"));
-const H={A:["Date","Type","Division","Range","Beat","Name","Animal sighting","Observation","Age","Distance (km)","Location","Range Maps"],S:["Date","Division","Range","Beat","Name","Animal sighting","Observation","Age","Location","Range Maps"],P:["Date","Division","Range","Beat","Name","Designation","Distance (km)","Range Maps"]}[view];
+function renderTable(){if(view=="M")return renderMaps();$("#pv").style.display=$("#pn").style.display="";const PS=100,L=CUR[view],n=L.length,pages=Math.max(1,Math.ceil(n/PS));pg=Math.min(Math.max(pg,0),pages-1);
+["A","S","P","M"].forEach(k=>$("#v"+k).className="btn "+(view==k?"on":"alt"));
+const H={A:["Date","Type","Division","Range","Beat","Name","Animal sighting","Observation","Age","Distance (km)","Location"],S:["Date","Division","Range","Beat","Name","Animal sighting","Observation","Age","Location"],P:["Date","Division","Range","Beat","Name","Designation","Distance (km)"]}[view];
 $("#th").innerHTML="<tr>"+H.map(h=>`<th>${h}</th>`).join("")+"</tr>";
 $("#tb").innerHTML=L.slice(pg*PS,pg*PS+PS).map(rowHtml).join("")||`<tr><td colspan="${H.length}">No records match these filters. Reset a filter to see more.</td></tr>`;
 $("#pinfo").textContent=n?"Showing "+(pg*PS+1).toLocaleString()+"–"+Math.min(n,pg*PS+PS).toLocaleString()+" of "+n.toLocaleString()+" records (page "+(pg+1)+" of "+pages.toLocaleString()+")":"0 records";
-$("#pv").disabled=pg<=0;$("#pn").disabled=pg>=pages-1;mapNote(L)}
+$("#pv").disabled=pg<=0;$("#pn").disabled=pg>=pages-1;$("#mapnote").textContent=""}
 $("#pv").onclick=()=>{pg--;renderTable()};$("#pn").onclick=()=>{pg++;renderTable()};
 
 $("#fl").onchange=render;
 $("#reset").onclick=()=>{F.forEach(([k])=>$("#f_"+k).value="");render()};
-["A","S","P"].forEach(k=>$("#v"+k).onclick=()=>{view=k;pg=0;renderTable()});
+["A","S","P","M"].forEach(k=>$("#v"+k).onclick=()=>{view=k;pg=0;renderTable()});
 /* ---- Range maps: month folders in Google Drive (read through the Apps Script address) ---- */
 const RANGES=["achampet","lingal","kollapur","nagarkurnool","amrabad","mannanur","domalapenta","maddimadugu","nagarjunasagar","kambalapally","devarakonda"],RALIAS={nsagar:"nagarjunasagar",sagar:"nagarjunasagar",nagarjuna:"nagarjunasagar"};
 let MAPIX=new Map(),MAPRG=new Set(),MAPSRC="Google Drive folder",MAPERR="Loading range maps…";
 const lev=(a,b)=>{const d=[];for(let i=0;i<=a.length;i++){d[i]=[i];for(let j=1;j<=b.length;j++)d[i][j]=i?0:j}for(let i=1;i<=a.length;i++)for(let j=1;j<=b.length;j++)d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]==b[j-1]?0:1));return d[a.length][b.length]};
 const CANON=new Map();
 function canon(s){s=String(s||"");let v=CANON.get(s);if(v!==undefined)return v;let k=s.toLowerCase().replace(/\.(jpe?g|png|gif|webp)$/,"").replace(/[^a-z0-9]/g,"").replace(/range$|rang$|ranges$/,"");if(RALIAS[k])k=RALIAS[k];else{let best=null,bd=99;for(const c of RANGES){const d=lev(k,c);if(d<bd){bd=d;best=c}}if(best&&bd<=2)k=best}CANON.set(s,k);return k}
-function buildMaps(list){const m=new Map(),rg=new Set();for(const fo of list){const mt=String(fo.f).match(/([A-Za-z]+)\W*(\d{4})/);if(!mt)continue;const mi=MN.findIndex(x=>x.toLowerCase().startsWith(mt[1].slice(0,3).toLowerCase()))+1,yr=+mt[2];if(!mi)continue;
-for(const x of fo.files){const g=canon(x.n);if(!g)continue;rg.add(g);const k=g+"|"+yr+"|"+mi;if(!m.has(k))m.set(k,{id:x.id,n:fo.f+"/"+x.n,t:x.n.replace(/\.[A-Za-z]+$/,"")+" · "+MN[mi-1]+" "+yr})}}
-if(!m.size)throw new Error("no map pictures found in the Drive month folders");return{m,rg}}
+function buildMaps(list){const m=new Map(),rg=new Set(),ls=[];for(const fo of list){const mt=String(fo.f).match(/([A-Za-z]+)\W*(\d{4})/);if(!mt)continue;const mi=MN.findIndex(x=>x.toLowerCase().startsWith(mt[1].slice(0,3).toLowerCase()))+1,yr=+mt[2];if(!mi)continue;
+for(const x of fo.files){const g=canon(x.n);if(!g)continue;rg.add(g);const k=g+"|"+yr+"|"+mi;const nm=x.n.replace(/\.[A-Za-z]+$/,"");const o={id:x.id,n:fo.f+"/"+x.n,t:nm+" · "+MN[mi-1]+" "+yr};if(!m.has(k))m.set(k,o);ls.push({y:yr,mi:mi,r:nm,id:x.id,n:o.n,t:o.t})}}
+if(!m.size)throw new Error("no map pictures found in the Drive month folders");ls.sort((a,b)=>b.y-a.y||b.mi-a.mi||a.r.localeCompare(b.r));return{m,rg,ls}}
+let MAPLIST=[];
+function renderMaps(){["A","S","P","M"].forEach(k=>$("#v"+k).className="btn "+(view==k?"on":"alt"));$("#pv").style.display=$("#pn").style.display="none";
+$("#th").innerHTML="<tr><th>Year</th><th>Month</th><th>Range</th><th>Range map link</th></tr>";
+$("#tb").innerHTML=MAPLIST.map(x=>`<tr><td>${x.y}</td><td>${MN[x.mi-1]}</td><td>${esc(x.r)}</td><td><a href="#" class="mapl" data-id="${esc(x.id)}" data-n="${esc(x.n)}" data-t="${esc(x.t)}">View map</a></td></tr>`).join("")||`<tr><td colspan="4">${MAPERR?esc(MAPERR):"No range maps found in the Drive folder."}</td></tr>`;
+$("#pinfo").textContent=MAPLIST.length?MAPLIST.length.toLocaleString()+" range maps (Google Drive folder, newest month first)":"";$("#mapnote").textContent=MAPERR&&MAPLIST.length==0?"Range Maps: "+MAPERR:""}
 const mapFor=r=>r.range&&r.year&&r.mi?MAPIX.get(canon(r.range)+"|"+r.year+"|"+r.mi):null;
 const MAPC=new Map();
 async function mapBlob(id){if(MAPC.has(id))return MAPC.get(id);const r=await fetch(KML_PROXY+"?img="+encodeURIComponent(id)),tx=await r.text(),m=tx.match(/^IMGB64:([\w\/+.-]+):/);if(!m)throw new Error(tx.slice(0,40)||"empty reply");const bin=atob(tx.slice(m[0].length).trim()),u8=Uint8Array.from(bin,c=>c.charCodeAt(0)),url=URL.createObjectURL(new Blob([u8],{type:m[1]}));MAPC.set(id,url);return url}
@@ -466,11 +470,11 @@ try{const u=await mapBlob(a.dataset.id);im.onload=()=>{im.style.display="";$("#m
 $("#mimg").onclick=e=>e.target.classList.toggle("full");$("#mx").onclick=()=>$("#mdlg").close();
 function mapNote(L){const n=L.length;let ok=0;const miss=new Set();for(const r of L){if(mapFor(r))ok++;else if(r.range&&!MAPRG.has(canon(r.range)))miss.add(r.range)}
 $("#mapnote").textContent=MAPERR?"Range Maps: "+MAPERR:"Range Maps: "+ok.toLocaleString()+" of "+n.toLocaleString()+" records linked to a map ("+MAPSRC+")."+(miss.size?" Range names not matched to any map: "+[...miss].slice(0,6).join(", ")+(miss.size>6?", …":"")+".":"")}
-async function loadMaps(){try{if(!KML_PROXY)throw new Error("no Apps Script address set");const{tx}=await getText(KML_PROXY+"?index=1","maps",true);let list;try{list=JSON.parse(tx)}catch(e){throw new Error(tx.slice(0,40)||"empty reply")}const b=buildMaps(list);MAPIX=b.m;MAPRG=b.rg;MAPERR=""}catch(e){MAPERR="could not read the Drive maps folder ("+(e.message=="Failed to fetch"?"blocked":e.message)+"). Update the Apps Script with the latest kml_proxy.gs and deploy a new version."}renderTable()}
+async function loadMaps(){try{if(!KML_PROXY)throw new Error("no Apps Script address set");const{tx}=await getText(KML_PROXY+"?index=1","maps",true);let list;try{list=JSON.parse(tx)}catch(e){throw new Error(tx.slice(0,40)||"empty reply")}const b=buildMaps(list);MAPIX=b.m;MAPRG=b.rg;MAPLIST=b.ls;MAPERR=""}catch(e){MAPERR="could not read the Drive maps folder ("+(e.message=="Failed to fetch"?"blocked":e.message)+"). Update the Apps Script with the latest kml_proxy.gs and deploy a new version."}renderTable()}
 const st=$("#status");st.textContent="Connecting to Google Sheet…";
 render();
 /* ---- Live sync with Google Sheet ---- */
-const BUILD="v30 · 18 Nov 2026",SHEET_ID="1TYnTFCx0BiQYlaupeiTu2tK5TpNIPA4FTTgSgzCbVHA",GID="0",REFRESH_HOURS=24;
+const BUILD="v31 · 18 Nov 2026",SHEET_ID="1TYnTFCx0BiQYlaupeiTu2tK5TpNIPA4FTTgSgzCbVHA",GID="0",REFRESH_HOURS=24;
 const PUB_URL="https://docs.google.com/spreadsheets/d/e/2PACX-1vT_-qn3XCA-eJkPGThRZBns84mn5w7kHoFeOkAXJ4DUS04hDfHwBn1fZ-l39aXnFDKVG4xBBogIW4So/pub?output=csv";
 const SOURCES=[["published link",PUB_URL],["sheet export","https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/export?format=csv&gid="+GID],["sheet query","https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/gviz/tq?tqx=out:csv&headers=1&gid="+GID]].filter(s=>s[1]);
 let busy=false,loaded=false;
