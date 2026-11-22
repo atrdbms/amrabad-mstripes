@@ -460,26 +460,31 @@ if(!m.size)throw new Error("no usable rows");return{m,rg}}
 {const b=buildMaps(MAPS_SNAPSHOT);MAPIX=b.m;MAPRG=b.rg}
 const mapFor=r=>r.range&&r.year&&r.mi?MAPIX.get(nr(r.range)+"|"+r.year+"|"+r.mi):null;
 const mapUrl=p=>MAP_BASE+String(p).split("/").map(encodeURIComponent).join("/");
-$("#tb").addEventListener("click",e=>{const a=e.target.closest(".mapl");if(!a)return;e.preventDefault();const p=a.dataset.p,u=mapUrl(p),im=$("#mimg");$("#mttl").textContent=a.dataset.t||"Range map";$("#mmsg").textContent="";im.style.display="";im.classList.remove("full");im.onerror=()=>{im.style.display="none";$("#mmsg").textContent="Map image not found at “"+p+"”. Upload the mstripe-maps folder to the website (GitHub) with the same folder and file names."};im.src=u;$("#mopen").href=u;$("#mdl").href=u;$("#mdl").download=p.split("/").pop();$("#mdlg").showModal()});
+const MAPC=new Map();
+async function mapBlob(p){if(MAPC.has(p))return MAPC.get(p);let url=null;
+if(KML_PROXY){try{const r=await fetch(KML_PROXY+"?map="+encodeURIComponent(p)),tx=await r.text(),m=tx.match(/^IMGB64:([\w\/+.-]+):/);if(m){const bin=atob(tx.slice(m[0].length).trim()),u8=Uint8Array.from(bin,c=>c.charCodeAt(0));url=URL.createObjectURL(new Blob([u8],{type:m[1]}))}}catch(e){}}
+if(!url)url=mapUrl(p);MAPC.set(p,url);return url}
+$("#tb").addEventListener("click",async e=>{const a=e.target.closest(".mapl");if(!a)return;e.preventDefault();const p=a.dataset.p,im=$("#mimg");$("#mttl").textContent=a.dataset.t||"Range map";$("#mmsg").textContent="Loading map…";im.style.display="none";im.classList.remove("full");$("#mopen").removeAttribute("href");$("#mdl").removeAttribute("href");$("#mdlg").showModal();
+const u=await mapBlob(p);im.onload=()=>{im.style.display="";$("#mmsg").textContent=""};im.onerror=()=>{MAPC.delete(p);im.style.display="none";$("#mmsg").textContent="Map image could not be loaded: “"+p+"”. Check that the file is in the Google Drive maps folder (or the site’s mstripe-maps folder) with exactly this folder and file name."};im.src=u;$("#mopen").href=u;$("#mdl").href=u;$("#mdl").download=p.split("/").pop()});
 $("#mimg").onclick=e=>e.target.classList.toggle("full");$("#mx").onclick=()=>$("#mdlg").close();
 function mapNote(L){const n=L.length;let ok=0;const miss=new Set();for(const r of L){if(mapFor(r))ok++;else if(r.range&&!MAPRG.has(nr(r.range)))miss.add(r.range)}
 $("#mapnote").textContent="Range Maps: "+ok.toLocaleString()+" of "+n.toLocaleString()+" records linked to a map (source: "+MAPSRC+")."+(miss.size?" Range names not found in the maps sheet: "+[...miss].slice(0,6).join(", ")+(miss.size>6?", …":"")+".":"")+(MAPERR?" Live maps sheet could not be read ("+MAPERR+"), using the built-in list.":"")}
 async function loadMaps(){const why=[],S=[["published link",MAPS_PUB_URL],["sheet export","https://docs.google.com/spreadsheets/d/"+MAPS_SHEET_ID+"/export?format=csv&gid="+MAPS_GID],["sheet query","https://docs.google.com/spreadsheets/d/"+MAPS_SHEET_ID+"/gviz/tq?tqx=out:csv&headers=1&gid="+MAPS_GID]].filter(s=>s[1]);
-for(const[l,u]of S){try{const{tx}=await getText(u,l);if(/^\s*</.test(tx))throw new Error("sheet is not public");const b=buildMaps(tx);MAPIX=b.m;MAPRG=b.rg;MAPSRC="Google Sheet (maps)";MAPERR="";renderTable();return}catch(e){why.push(l+": "+(e.message=="Failed to fetch"?"blocked or not public":e.message))}}
+for(const[l,u]of S){try{const{tx}=await getText(u,l,true);if(/^\s*</.test(tx))throw new Error("sheet is not public");const b=buildMaps(tx);MAPIX=b.m;MAPRG=b.rg;MAPSRC="Google Sheet (maps)";MAPERR="";renderTable();return}catch(e){why.push(l+": "+(e.message=="Failed to fetch"?"blocked or not public":e.message))}}
 MAPERR=why.join("; ");renderTable()}
 const st=$("#status");st.textContent="Connecting to Google Sheet…";
 render();
 /* ---- Live sync with Google Sheet ---- */
-const BUILD="v25 · 18 Nov 2026",SHEET_ID="1TYnTFCx0BiQYlaupeiTu2tK5TpNIPA4FTTgSgzCbVHA",GID="0",REFRESH_HOURS=24;
+const BUILD="v26 · 18 Nov 2026",SHEET_ID="1TYnTFCx0BiQYlaupeiTu2tK5TpNIPA4FTTgSgzCbVHA",GID="0",REFRESH_HOURS=24;
 const PUB_URL="https://docs.google.com/spreadsheets/d/e/2PACX-1vT_-qn3XCA-eJkPGThRZBns84mn5w7kHoFeOkAXJ4DUS04hDfHwBn1fZ-l39aXnFDKVG4xBBogIW4So/pub?output=csv";
 const SOURCES=[["published link",PUB_URL],["sheet export","https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/export?format=csv&gid="+GID],["sheet query","https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/gviz/tq?tqx=out:csv&headers=1&gid="+GID]].filter(s=>s[1]);
 let busy=false,loaded=false;
-async function getText(u,label){const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),240000);
+async function getText(u,label,quiet){const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),240000);
 try{const res=await fetch(u+(u.includes("?")?"&":"?")+"_="+Date.now(),{cache:"no-store",signal:ctl.signal});
 if(!res.ok)throw new Error("HTTP "+res.status);
 if(!res.body||!res.body.getReader)return{tx:await res.text(),n:0};
 const rd=res.body.getReader(),dec=new TextDecoder("utf-8");let s="",n=0;
-for(;;){const{done,value}=await rd.read();if(done)break;n+=value.length;s+=dec.decode(value,{stream:true});st.textContent="Downloading from "+label+": "+(n/1048576).toFixed(1)+" MB…"}
+for(;;){const{done,value}=await rd.read();if(done)break;n+=value.length;s+=dec.decode(value,{stream:true});if(!quiet)st.textContent="Downloading from "+label+": "+(n/1048576).toFixed(1)+" MB…"}
 return{tx:s+dec.decode(),n}}finally{clearTimeout(to)}}
 async function sync(){if(busy)return;busy=true;$("#rf").disabled=true;const why=[];
 for(const[label,u]of SOURCES){try{
