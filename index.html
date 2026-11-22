@@ -265,7 +265,7 @@ $("#bm").onchange=redraw;window.addEventListener("resize",redraw)})();
 let KL=[],OL=[],OFF=null,KTOK=0;const KC=new Map();
 const DR2=d=>DR(d),okey=r=>r.division+"|"+r.range+"|"+r.name;
 const kmlUrls=s=>{const o=[];(String(s||"").match(/https?:\/\/[^\s,;"'<>]+/g)||[]).forEach(u=>{if(!o.includes(u))o.push(u)});return o};
-const KML_PROXY="https://script.google.com/macros/s/AKfycbz9F6QmzgzGVrFNluVUFpdSKzHNrc4rHkUp-I-uZxWLFm0vHY-3lUPJuMkmgjmUtfg-/exec";/* optional: Apps Script web-app address that serves Google Drive KML files */
+const KML_PROXY="https://script.google.com/macros/s/AKfycbxY27vSwVXEFRg2k4T24GPDNoqPrBVzniOiZ3zWbSZt6IS9O88Ki4Nl9s6LmuXd9n3d/exec";/* optional: Apps Script web-app address that serves Google Drive KML files */
 const KML_BASE="kml/";/* folder in this GitHub site that holds KML files named in the sheet */
 const GDRIVE_API_KEY="";/* optional: Google API key (Drive API enabled) so Drive-hosted KML files can be read by the browser */
 const kmlFetchUrl=u=>{const m=u.match(/drive\.google\.com\/file\/d\/([\w-]+)/)||u.match(/drive\.google\.com\/(?:open|uc)\?(?:[^#]*&)?id=([\w-]+)/);return m?(KML_PROXY?KML_PROXY+"?id="+m[1]:GDRIVE_API_KEY?"https://www.googleapis.com/drive/v3/files/"+m[1]+"?alt=media&key="+GDRIVE_API_KEY:"https://drive.google.com/uc?export=download&id="+m[1]):u};
@@ -475,7 +475,7 @@ MAPERR=why.join("; ");renderTable()}
 const st=$("#status");st.textContent="Connecting to Google Sheet…";
 render();
 /* ---- Live sync with Google Sheet ---- */
-const BUILD="v26 · 18 Nov 2026",SHEET_ID="1TYnTFCx0BiQYlaupeiTu2tK5TpNIPA4FTTgSgzCbVHA",GID="0",REFRESH_HOURS=24;
+const BUILD="v27 · 18 Nov 2026",SHEET_ID="1TYnTFCx0BiQYlaupeiTu2tK5TpNIPA4FTTgSgzCbVHA",GID="0",REFRESH_HOURS=24;
 const PUB_URL="https://docs.google.com/spreadsheets/d/e/2PACX-1vT_-qn3XCA-eJkPGThRZBns84mn5w7kHoFeOkAXJ4DUS04hDfHwBn1fZ-l39aXnFDKVG4xBBogIW4So/pub?output=csv";
 const SOURCES=[["published link",PUB_URL],["sheet export","https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/export?format=csv&gid="+GID],["sheet query","https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/gviz/tq?tqx=out:csv&headers=1&gid="+GID]].filter(s=>s[1]);
 let busy=false,loaded=false;
