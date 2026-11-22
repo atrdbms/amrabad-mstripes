@@ -51,7 +51,7 @@ svg.map{width:100%;height:auto;display:block;background:var(--head2);border:1px 
 .legend i{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;vertical-align:-2px}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .card h3{font-size:1rem;margin-bottom:10px}
-.row{display:grid;grid-template-columns:minmax(90px,170px) 1fr 58px;gap:10px;align-items:center;font-size:.86rem;margin:7px 0}
+.row{display:grid;grid-template-columns:minmax(90px,170px) 1fr 128px;gap:10px;align-items:center;font-size:.86rem;margin:7px 0}
 .lb{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .track{background:var(--head2);border:1px solid var(--line);height:12px}
 .fill{height:100%;background:var(--bar)}
@@ -121,13 +121,14 @@ footer .wrap{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-con
 
 <section id="trends"><h2 class="sec">Trends for selected filters</h2>
 <div class="two"><div class="card"><h3>Patrol distance by month (km)</h3><div id="cMonth"></div></div><div class="card"><h3>Wildlife signs by species</h3><div id="cSpec"></div></div></div></section>
-<section id="effort"><h2 class="sec">Patrol effort (km walked)</h2>
+<section id="effort"><h2 class="sec">Patrol effort (km walked and patrol days)</h2>
 <div class="two"><div class="card"><h3>By officer</h3><div id="bStaff"></div></div><div class="card"><h3>By beat</h3><div id="bBeat"></div></div></div>
 </section>
 
 <section id="mapsec"><h2 class="sec">Wildlife sign map</h2>
 <div class="card"><div class="mapbar"><label class="f" style="display:flex;align-items:center;gap:8px">Base map <select id="bm" style="margin:0;width:auto"><option value="gsat">Google Satellite</option><option value="ghyb">Google Satellite with place names</option><option value="sat">Esri Satellite</option><option value="hyb">Esri Satellite with place names</option><option value="st">Esri Street map</option></select></label><span class="note">Drag to move, scroll or use + / − to zoom. Hover a point for details.</span></div>
-<div class="seg" style="margin:8px 0"><label class="btn alt" style="cursor:pointer">Load KML file<input type="file" id="kmlf" accept=".kml,.xml" hidden></label><button class="btn alt" id="kmlc">Clear KML</button><span class="note" id="kmlmsg"></span></div>
+<div class="seg" style="margin:8px 0"><label class="btn alt" style="cursor:pointer">Add KML / KMZ layer<input type="file" id="kmlf" accept=".kml,.kmz,.xml" multiple hidden></label><button class="btn alt" id="kmlc">Clear all KML</button><span class="note" id="kmlmsg"></span></div>
+<div id="lyr" style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px"></div>
 <div style="position:relative"><canvas id="map" style="width:100%;height:clamp(380px,64vh,660px);display:block;background:#1b2a22;border:1px solid var(--line);touch-action:none;cursor:grab" role="img" aria-label="Satellite map of wildlife sign locations. Hover a point for details."></canvas>
 <div class="mctl"><button id="zi" aria-label="Zoom in">+</button><button id="zo" aria-label="Zoom out">&minus;</button><button id="zf" aria-label="Fit to records" title="Fit to records">&#9974;</button></div>
 <div id="kpop" style="position:absolute;display:none;top:10px;right:10px;width:min(340px,calc(100% - 70px));max-height:70%;overflow:auto;background:var(--surf);color:var(--tx);border:1px solid var(--line);border-radius:6px;padding:10px 12px;box-shadow:0 2px 10px rgba(0,0,0,.4);font-size:.88rem"></div>
@@ -136,8 +137,8 @@ footer .wrap{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-con
 </section>
 
 <section id="offrep"><h2 class="sec">Officer-wise report</h2>
-<div class="tw" style="max-height:480px;overflow:auto"><table><thead><tr><th>Sl.No</th><th>Division</th><th>Range</th><th>Name with designation</th><th class="r">No of patrol</th><th class="r">Total Patrolled in Km</th><th class="r">No. of observations</th><th>Generate report</th></tr></thead><tbody id="ob"></tbody></table></div>
-<p class="note">Click an officer's name to open the detailed report and show that officer's KML track on the map.</p>
+<div class="tw" style="max-height:480px;overflow:auto"><table><thead><tr><th>Sl.No</th><th>Division</th><th>Range</th><th>Name with designation</th><th class="r">No of patrol</th><th class="r">No of patrol days</th><th class="r">Total Patrolled in Km</th><th class="r">No. of observations</th><th>Generate report</th></tr></thead><tbody id="ob"></tbody></table></div>
+<p class="note">Click an officer's name to open the detailed report and show that officer's KML track on the map. Patrol days count each date once, even if there were several patrols on that date; the Total row counts each calendar date once across all officers.</p>
 <div id="od"></div>
 </section>
 
@@ -190,14 +191,14 @@ $("#fl").innerHTML=F.map(([k,l])=>`<label class="f">${l}<select id="f_${k}"></se
 let PFX="f_";const val=k=>$("#"+PFX+k).value,withPfx=(p,fn)=>{const o=PFX;PFX=p;try{return fn()}finally{PFX=o}};
 const m=(r,skip=[])=>F.every(([k])=>skip.includes(k)||!val(k)||r[k]==val(k));
 const grp=a=>/tiger/i.test(a)?"t":/dhole|wild dog|jungle|leopard|hyena|sloth|bear|fox|jackal/i.test(a)?"c":"p";
-const sum=(a,k)=>{const o={};a.forEach(x=>o[k(x)]=(o[k(x)]||0)+x.dist);return Object.entries(o).sort((a,b)=>b[1]-a[1])};
+const sum=(a,k)=>{const o={},d={};a.forEach(x=>{const g=k(x);o[g]=(o[g]||0)+x.dist;(d[g]=d[g]||new Set()).add(dkey(x)||x.date)});return Object.entries(o).map(([g,v])=>[g,v,d[g].size]).sort((a,b)=>b[1]-a[1])};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const DR=d=>{const i=["FRO","DYRO","FSO","FBO"].indexOf((d||"").replace(/[^a-z]/gi,"").toUpperCase());return i<0?9:i};
 function options(){F.forEach(([k,l])=>{const cur=val(k),u=new Map();
 const dg={};rows.forEach(r=>{if(r[k]&&m(r,[k])){u.set(r[k],r.mi||0);if(k=="name"&&r.desig&&!dg[r.name])dg[r.name]=r.desig}});
 let v=[...u.keys()];v=k=="month"?v.sort((a,b)=>u.get(a)-u.get(b)):k=="otype"?v.sort().reverse():k=="name"?v.sort((a,b)=>DR(dg[a])-DR(dg[b])||a.localeCompare(b)):k=="year"?v.sort().reverse():v.sort();
 $("#"+PFX+k).innerHTML=`<option value="">All</option>`+v.map(x=>`<option value="${esc(x)}">${esc(x)}${dg[x]?", "+esc(dg[x]):""}</option>`).join("");$("#"+PFX+k).value=v.includes(cur)?cur:""})}
-function bars(el,d){const mx=d[0]?d[0][1]:1;$(el).innerHTML=d.slice(0,10).map(([k,v])=>`<div class="row"><span class="lb" title="${esc(k)}">${esc(k)}</span><div class="track"><div class="fill" style="width:${v/mx*100}%"></div></div><span class="v">${v.toFixed(1)}</span></div>`).join("")||'<p class="note">No patrols match these filters.</p>'}
+function bars(el,d){const mx=d[0]?d[0][1]:1;$(el).innerHTML=d.slice(0,10).map(([k,v,dd])=>`<div class="row"><span class="lb" title="${esc(k)}">${esc(k)}</span><div class="track"><div class="fill" style="width:${v/mx*100}%"></div></div><span class="v" style="white-space:nowrap">${v.toFixed(1)} km · ${dd} d</span></div>`).join("")||'<p class="note">No patrols match these filters.</p>'}
 /* ---- Satellite map (Esri World Imagery tiles drawn on a canvas) ---- */
 const ESRI="https://server.arcgisonline.com/ArcGIS/rest/services/";
 const IMG=ESRI+"World_Imagery/MapServer/tile/{z}/{y}/{x}",LAB=ESRI+"Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",STR=ESRI+"World_Street_Map/MapServer/tile/{z}/{y}/{x}";
@@ -224,8 +225,11 @@ const r=z<8?3.5:z<11?4.5:6,few=MPO.length<8000,dot=(arr,col)=>{c.beginPath();for
 dot(MPO.filter(q=>q.g=="c"),"#FF5A36");dot(MPO.filter(q=>q.g!="c"),"#3DDCFF");
 const ps=7;for(const q of MPT){const x=q.nx*W0-ox,y=q.ny*W0-oy;if(x<-30||y<-30||x>w+30||y>h+30)continue;pug(c,x,y,ps)}
 c.lineJoin="round";c.lineCap="round";
-for(const k of KL){if(k.k=="p")continue;c.beginPath();k.p.forEach((q,i)=>{const x=q[0]*W0-ox,y=q[1]*W0-oy;i?c.lineTo(x,y):c.moveTo(x,y)});if(k.k=="g"){c.closePath();c.fillStyle="rgba(255,230,0,.18)";c.fill()}const sel=k===KSEL;c.lineWidth=sel?8:5;c.strokeStyle="rgba(0,0,0,.65)";c.stroke();c.lineWidth=sel?4.5:2.5;c.strokeStyle=sel?"#FF9100":"#FFE600";c.stroke()}
-for(const k of KL)if(k.k=="p")for(const q of k.p){const x=q[0]*W0-ox,y=q[1]*W0-oy;const sel=k===KSEL,sz=sel?6:4;c.fillStyle=sel?"#FF9100":"#FFE600";c.strokeStyle="#000";c.lineWidth=1.5;c.beginPath();c.rect(x-sz,y-sz,2*sz,2*sz);c.fill();c.stroke()}
+const AF=allFeat();
+for(const k of AF){if(k.k=="p")continue;c.beginPath();k.p.forEach((q,i)=>{const x=q[0]*W0-ox,y=q[1]*W0-oy;i?c.lineTo(x,y):c.moveTo(x,y)});const sel=k===KSEL,col=sel?"#FF9100":colOf(k);if(k.k=="g"){c.closePath();c.globalAlpha=.2;c.fillStyle=col;c.fill();c.globalAlpha=1}c.lineWidth=sel?8:5;c.strokeStyle="rgba(0,0,0,.65)";c.stroke();c.lineWidth=sel?4.5:2.5;c.strokeStyle=col;c.stroke()}
+c.font="600 12px sans-serif";c.textAlign="left";
+for(const k of AF)if(k.k=="p")for(const q of k.p){const x=q[0]*W0-ox,y=q[1]*W0-oy;if(x<-40||y<-40||x>w+40||y>h+40)continue;const sel=k===KSEL,sz=sel?8:6;c.fillStyle=sel?"#FF9100":colOf(k);c.strokeStyle="#000";c.lineWidth=1.5;c.beginPath();c.moveTo(x,y-sz-1);c.lineTo(x+sz+1,y);c.lineTo(x,y+sz+1);c.lineTo(x-sz-1,y);c.closePath();c.fill();c.stroke();
+if(z>=12&&k.a&&k.a.name){c.lineWidth=3;c.strokeStyle="rgba(0,0,0,.8)";c.strokeText(k.a.name,x+sz+4,y+4);c.fillStyle="#fff";c.fillText(k.a.name,x+sz+4,y+4)}}
 if(!MPO.length&&!MPT.length){c.fillStyle="rgba(0,0,0,.6)";c.fillRect(0,12,w,40);c.fillStyle="#fff";c.font="14px sans-serif";c.textAlign="center";c.fillText("No sign locations match these filters. Reset a filter to see more.",w/2,38);c.textAlign="start"}
 const bv=$("#bm").value,at=bv[0]=="g"?"Imagery ©Google":bv=="st"?"Tiles: Esri":"Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community";c.font="11px sans-serif";const tw=c.measureText(at).width;c.fillStyle="rgba(0,0,0,.55)";c.fillRect(w-tw-14,h-20,tw+14,20);c.fillStyle="#fff";c.fillText(at,w-tw-7,h-6);
 const bm=$("#bm").value,t0=TC[TL[bm][0]]||{ok:0,bad:0};
@@ -274,28 +278,42 @@ return out}
 const kmLen=p=>{let s=0;for(let i=1;i<p.length;i++){const R=6371,r=Math.PI/180,dl=(p[i][3]-p[i-1][3])*r,dn=(p[i][2]-p[i-1][2])*r,a=Math.sin(dl/2)**2+Math.cos(p[i-1][3]*r)*Math.cos(p[i][3]*r)*Math.sin(dn/2)**2;s+=2*R*Math.asin(Math.sqrt(a))}return s};
 let KSEL=null;
 function kmlHit(mx,my){const W0=256*Math.pow(2,MV.z),cvs=$("#map"),rc=cvs.getBoundingClientRect(),ox=MV.cx*W0-rc.width/2,oy=MV.cy*W0-rc.height/2,X=q=>q[0]*W0-ox,Y=q=>q[1]*W0-oy;let best=null,bd=1e9;
-for(const k of KL){let dd=1e9;if(k.k=="p"){for(const q of k.p)dd=Math.min(dd,Math.hypot(X(q)-mx,Y(q)-my))}
+for(const k of allFeat()){let dd=1e9;if(k.k=="p"){for(const q of k.p)dd=Math.min(dd,Math.hypot(X(q)-mx,Y(q)-my))}
 else{for(let i=1;i<k.p.length;i++){const ax=X(k.p[i-1]),ay=Y(k.p[i-1]),bx=X(k.p[i]),by=Y(k.p[i]),vx=bx-ax,vy=by-ay,L=vx*vx+vy*vy,u=L?Math.max(0,Math.min(1,((mx-ax)*vx+(my-ay)*vy)/L)):0;dd=Math.min(dd,Math.hypot(ax+u*vx-mx,ay+u*vy-my))}
 if(k.k=="g"&&dd>9){let ins=false;for(let i=0,j=k.p.length-1;i<k.p.length;j=i++){const xi=X(k.p[i]),yi=Y(k.p[i]),xj=X(k.p[j]),yj=Y(k.p[j]);if((yi>my)!=(yj>my)&&mx<(xj-xi)*(my-yi)/(yj-yi)+xi)ins=!ins}if(ins)dd=9}}
 if(dd<=9&&dd<bd){bd=dd;best=k}}return best}
-function kmlClick(e){if(!KL.length)return;const rc=$("#map").getBoundingClientRect(),k=kmlHit(e.clientX-rc.left,e.clientY-rc.top);KSEL=k;redraw();const pop=$("#kpop");if(!k){pop.style.display="none";return}
+function kmlClick(e){if(!allFeat().length)return;const rc=$("#map").getBoundingClientRect(),k=kmlHit(e.clientX-rc.left,e.clientY-rc.top);KSEL=k;redraw();const pop=$("#kpop");if(!k){pop.style.display="none";return}
 const a=k.a||{name:"",rows:[]},ty=k.k=="p"?"Point":k.k=="g"?"Polygon":"Line",rows=a.rows.slice();if(k.k=="l")rows.push(["Length",kmLen(k.p).toFixed(2)+" km"]);if(k.k=="p")rows.push(["Location",k.p[0][3].toFixed(6)+", "+k.p[0][2].toFixed(6)]);
 pop.innerHTML='<button id="kpx" aria-label="Close" style="float:right;border:0;background:none;font-size:1.2rem;cursor:pointer;color:inherit">&times;</button><b>'+esc(a.name||"KML feature")+'</b> <span class="note">· '+ty+'</span><table style="margin-top:6px;font-size:.82rem">'+rows.map(r=>'<tr><td style="font-weight:600;vertical-align:top;padding:2px 10px 2px 0">'+esc(r[0])+'</td><td style="padding:2px 0;word-break:break-word">'+esc(r[1])+'</td></tr>').join("")+'</table>'+(rows.length?"":'<p class="note">No attributes in this KML feature.</p>');
 pop.style.display="block";$("#kpx").onclick=()=>{pop.style.display="none";KSEL=null;redraw()}}
-function kmlFit(){const A=[];KL.forEach(k=>k.p.forEach(q=>A.push({nx:q[0],ny:q[1]})));if(A.length){fitMap(A);const z=MV.z;if(z>16)MV.z=16}redraw()}
+function kmlFit(src){const A=[];(src||allFeat()).forEach(k=>k.p.forEach(q=>A.push({nx:q[0],ny:q[1]})));if(A.length){fitMap(A);const z=MV.z;if(z>16)MV.z=16}redraw()}
 function kmlNote(h){$("#kpop").style.display="none";KSEL=null;$("#kmlmsg").innerHTML=h}
 async function loadKMLs(urls){const tok=++KTOK;KL=[];redraw();if(!urls.length){kmlNote("No KML link found for this officer in the sheet.");return}
 kmlNote("Loading KML…");const fails=[];let ok=0;
 await Promise.all(urls.map(async u=>{try{let a=KC.get(u);if(!a){const r=await fetch(kmlFetchUrl(u),{cache:"no-store"});if(!r.ok)throw new Error(r.status);a=parseKML(await r.text());KC.set(u,a)}if(tok!==KTOK)return;a.forEach(x=>KL.push(x));ok++}catch(e){fails.push(u)}}));
 if(tok!==KTOK)return;
-kmlNote((ok?"KML tracks shown on the map ("+ok+" of "+urls.length+" files)":"KML could not be read here")+(fails.length?'. Could not read: '+fails.map((u,i)=>'<a href="'+esc(u)+'" target="_blank" rel="noopener">link '+(i+1)+'</a>').join(", ")+'. Google Drive links must be shared as “Anyone with the link”; otherwise download the file and use “Load KML file”.':""));
+kmlNote((ok?"KML tracks shown on the map ("+ok+" of "+urls.length+" files)":"KML could not be read here")+(fails.length?'. Could not read: '+fails.map((u,i)=>'<a href="'+esc(u)+'" target="_blank" rel="noopener">link '+(i+1)+'</a>').join(", ")+'. Google Drive links must be shared as “Anyone with the link”; otherwise download the file and use “Add KML / KMZ layer”.':""));
 if(KL.length)kmlFit()}
-$("#kmlf").onchange=async e=>{const f=e.target.files[0];if(!f)return;KTOK++;try{KL=parseKML(await f.text());kmlNote(esc(f.name)+" shown on the map");kmlFit()}catch(x){KL=[];kmlNote("That file is not a valid KML");redraw()}e.target.value=""};
-$("#kmlc").onclick=()=>{KTOK++;KL=[];kmlNote("");redraw()};
-function officers(P,S){const o=new Map(),get=r=>{const k=okey(r);let e=o.get(k);if(!e){e={k,division:r.division,range:r.range,name:r.name,desig:"",p:0,km:0,s:0};o.set(k,e)}if(r.desig&&!e.desig)e.desig=r.desig;return e};
-P.forEach(r=>{if(r.name){const e=get(r);e.p++;e.km+=r.dist}});S.forEach(r=>{if(r.name)get(r).s++});
+let LY=[];const PAL=["#00E5FF","#FF4081","#76FF03","#FFAB40","#B388FF","#FF5252","#18FFFF","#F4FF81"];
+const allFeat=()=>{const o=KL.slice();LY.forEach(l=>{if(l.vis)l.f.forEach(k=>o.push(k))});return o},colOf=k=>k.col||"#FFE600";
+async function readKMZ(buf){const v=new DataView(buf);let e=-1;for(let i=buf.byteLength-22;i>=Math.max(0,buf.byteLength-70000);i--)if(v.getUint32(i,true)==0x06054b50){e=i;break}if(e<0)throw new Error("not a zip");
+let n=v.getUint16(e+10,true),o=v.getUint32(e+16,true),best=null;const dec=new TextDecoder();
+for(let i=0;i<n;i++){if(v.getUint32(o,true)!=0x02014b50)break;const m=v.getUint16(o+10,true),cs=v.getUint32(o+20,true),nl=v.getUint16(o+28,true),el=v.getUint16(o+30,true),cl=v.getUint16(o+32,true),lo=v.getUint32(o+42,true),nm=dec.decode(new Uint8Array(buf,o+46,nl));
+if(/\.kml$/i.test(nm)&&(!best||/(^|\/)doc\.kml$/i.test(nm)))best={m,cs,lo};o+=46+nl+el+cl}
+if(!best)throw new Error("no kml in kmz");const ln=v.getUint16(best.lo+26,true),le=v.getUint16(best.lo+28,true),st=best.lo+30+ln+le,raw=new Uint8Array(buf,st,best.cs);
+if(best.m==0)return dec.decode(raw);return await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text()}
+function renderLayers(){$("#lyr").innerHTML=LY.map((l,i)=>`<span style="display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:16px;padding:3px 10px;font-size:.82rem"><input type="checkbox" data-v="${i}" ${l.vis?"checked":""} aria-label="Show ${esc(l.name)}"><i style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${l.col}"></i>${esc(l.name)} <span class="note">(${l.f.length})</span><button class="btn alt" data-z="${i}" style="padding:1px 8px;font-size:.75rem">Zoom</button><button class="btn alt" data-x="${i}" style="padding:1px 8px;font-size:.75rem" aria-label="Remove layer">&times;</button></span>`).join("")}
+$("#lyr").addEventListener("change",e=>{const i=e.target.dataset.v;if(i==null)return;LY[i].vis=e.target.checked;$("#kpop").style.display="none";KSEL=null;redraw()});
+$("#lyr").addEventListener("click",e=>{const z=e.target.closest("[data-z]"),x=e.target.closest("[data-x]");if(z){LY[z.dataset.z].vis=true;renderLayers();kmlFit(LY[z.dataset.z].f)}if(x){LY.splice(x.dataset.x,1);renderLayers();$("#kpop").style.display="none";KSEL=null;redraw()}});
+$("#kmlf").onchange=async e=>{const fs=[...e.target.files];e.target.value="";if(!fs.length)return;KTOK++;const bad=[],added=[];
+for(const f of fs){try{const tx=/\.kmz$/i.test(f.name)?await readKMZ(await f.arrayBuffer()):await f.text(),ft=parseKML(tx);if(!ft.length)throw new Error("empty");const col=PAL[LY.length%PAL.length];ft.forEach(k=>k.col=col);const l={name:f.name.replace(/\.(kml|kmz|xml)$/i,""),col,vis:true,f:ft};LY.push(l);added.push(l)}catch(x){bad.push(f.name)}}
+renderLayers();kmlNote((added.length?added.map(l=>esc(l.name)+" ("+l.f.length+" features)").join(", ")+" added to the map. Click any feature to see its attributes.":"")+(bad.length?" Could not read: "+bad.map(esc).join(", ")+" (needs a valid KML or KMZ with coordinates).":""));
+if(added.length)kmlFit(added.flatMap(l=>l.f))};
+$("#kmlc").onclick=()=>{KTOK++;KL=[];LY=[];renderLayers();kmlNote("");redraw()};
+function officers(P,S){const o=new Map(),get=r=>{const k=okey(r);let e=o.get(k);if(!e){e={k,division:r.division,range:r.range,name:r.name,desig:"",p:0,km:0,s:0,d:new Set()};o.set(k,e)}if(r.desig&&!e.desig)e.desig=r.desig;return e};
+P.forEach(r=>{if(r.name){const e=get(r);e.p++;e.km+=r.dist;e.d.add(dkey(r)||r.date)}});S.forEach(r=>{if(r.name)get(r).s++});
 OL=[...o.values()].sort((a,b)=>a.division.localeCompare(b.division)||a.range.localeCompare(b.range)||DR(a.desig)-DR(b.desig)||a.name.localeCompare(b.name));
-let tp=0,ts=0,tk=0;$("#ob").innerHTML=OL.map((e,i)=>{tp+=e.p;ts+=e.s;tk+=e.km;return`<tr><td>${i+1}</td><td>${esc(e.division)}</td><td>${esc(e.range)}</td><td><a class="ol" href="#" data-k="${esc(e.k)}">${esc(e.name)}${e.desig?", "+esc(e.desig):""}</a></td><td class="r">${e.p.toLocaleString()}</td><td class="r">${e.km.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})}</td><td class="r">${e.s.toLocaleString()}</td><td><button class="btn alt gr" data-k="${esc(e.k)}">Generate</button></td></tr>`}).join("")+(OL.length?`<tr class="tot"><td colspan="4">Total</td><td class="r">${tp.toLocaleString()}</td><td class="r">${tk.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})}</td><td class="r">${ts.toLocaleString()}</td><td></td></tr>`:'<tr><td colspan="8" class="note">No officers match these filters.</td></tr>');
+let tp=0,ts=0,tk=0;$("#ob").innerHTML=OL.map((e,i)=>{tp+=e.p;ts+=e.s;tk+=e.km;return`<tr><td>${i+1}</td><td>${esc(e.division)}</td><td>${esc(e.range)}</td><td><a class="ol" href="#" data-k="${esc(e.k)}">${esc(e.name)}${e.desig?", "+esc(e.desig):""}</a></td><td class="r">${e.p.toLocaleString()}</td><td class="r">${e.d.size}</td><td class="r">${e.km.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})}</td><td class="r">${e.s.toLocaleString()}</td><td><button class="btn alt gr" data-k="${esc(e.k)}">Generate</button></td></tr>`}).join("")+(OL.length?`<tr class="tot"><td colspan="4">Total</td><td class="r">${tp.toLocaleString()}</td><td class="r">${pdays(P)}</td><td class="r">${tk.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})}</td><td class="r">${ts.toLocaleString()}</td><td></td></tr>`:'<tr><td colspan="9" class="note">No officers match these filters.</td></tr>');
 if(OFF){if(OL.some(e=>e.k==OFF))showOfficer(false);else{OFF=null;$("#od").innerHTML=""}}}
 function genReport(K){const b=offBuild(K);if(!b)return;const w=window.open("","_blank");if(!w){alert("Please allow pop-ups for this page to generate the report.");return}
 const fl=F.map(([k,l])=>val(k)?l+": "+val(k):"").filter(Boolean).join(" | ")||"None (all records)",im=[...document.querySelectorAll("header.gov img")].slice(0,2).map(i=>`<img src="${i.src}" style="width:64px;height:64px;object-fit:contain">`).join(""),
@@ -305,21 +323,31 @@ body{background:#fff;color:#16130C;margin:0;padding:18px 24px}.tw{max-height:non
 <div class="rh">${im}<div><h1>MStripes Field Monitoring Database</h1><p>Amrabad Tiger Reserve · Telangana Forest Department</p><p><b>Officer-wise report</b> · Generated ${new Date().toLocaleString("en-IN")}</p><p>Filters applied: ${esc(fl)}</p></div></div>${b.h}
 <script>setTimeout(function(){window.print()},500)<\/script></body></html>`);w.document.close()}
 $("#ob").addEventListener("click",e=>{const g=e.target.closest(".gr");if(g){genReport(g.dataset.k);return}const a=e.target.closest(".ol");if(!a)return;e.preventDefault();OFF=a.dataset.k;showOfficer(true)});
+
+const mlab=k=>{const[y,m]=k.trim().split(" ");return(m||"").slice(0,3)+" "+(y||"")};
+function svgCols(labels,vals,col){const w=560,h=180,pl=44,pb=40,n=vals.length;if(!n||!Math.max(...vals))return'<p class="note">No data</p>';const mx=Math.max(...vals),sw=(w-pl)/n,bw=Math.max(4,sw*.7);
+let s=`<svg viewBox="0 0 ${w} ${h}" role="img" style="width:100%;height:auto"><line x1="${pl}" y1="${h-pb}" x2="${w}" y2="${h-pb}" stroke="#999"/>`;
+for(let i=0;i<=2;i++){const y=h-pb-(h-pb-12)*i/2;s+=`<line x1="${pl}" y1="${y}" x2="${w}" y2="${y}" stroke="#ddd"/><text x="${pl-5}" y="${y+3}" font-size="10" text-anchor="end" fill="#666">${Math.round(mx*i/2).toLocaleString()}</text>`}
+vals.forEach((v,i)=>{const x=pl+sw*i+(sw-bw)/2,bh=(h-pb-12)*v/mx;s+=`<rect x="${x}" y="${h-pb-bh}" width="${bw}" height="${bh}" fill="${col}"><title>${esc(labels[i])}: ${Math.round(v).toLocaleString()}</title></rect>`;if(n<=16||i%2==0)s+=`<text x="${x+bw/2}" y="${h-pb+12}" font-size="9" text-anchor="end" fill="#444" transform="rotate(-40 ${x+bw/2} ${h-pb+12})">${esc(labels[i])}</text>`});return s+"</svg>"}
+function svgH(pairs,col){pairs=pairs.slice(0,10);if(!pairs.length)return'<p class="note">No data</p>';const mx=Math.max(...pairs.map(p=>p[1]),1),w=560,rh=22,lw=150,h=pairs.length*rh+6;
+return`<svg viewBox="0 0 ${w} ${h}" role="img" style="width:100%;height:auto">`+pairs.map((p,i)=>{const y=i*rh+3,bw=(w-lw-60)*p[1]/mx;return`<text x="${lw-6}" y="${y+14}" font-size="11" text-anchor="end" fill="#333">${esc(String(p[0]).slice(0,24))}</text><rect x="${lw}" y="${y+2}" width="${Math.max(1,bw)}" height="${rh-8}" fill="${col}"/><text x="${lw+bw+5}" y="${y+14}" font-size="11" fill="#333">${Math.round(p[1]).toLocaleString()}</text>`}).join("")+"</svg>"}
 const dkey=r=>{const m=String(r.date).match(/(\d+)\D+(\d+)\D+(\d{4})/);return m?m[3]+m[2].padStart(2,"0")+m[1].padStart(2,"0"):""};
+const pdays=a=>{const s=new Set();a.forEach(r=>{const k=dkey(r)||r.date;if(k)s.add(k)});return s.size};
 const cnt=(a,f)=>{const o={};a.forEach(x=>{const k=f(x)||"–";o[k]=(o[k]||0)+1});return Object.entries(o).sort((a,b)=>b[1]-a[1])};
 const mini=(h,rows)=>`<div class="tw" style="max-height:300px;overflow:auto"><table><thead><tr>${h.map((x,i)=>`<th${i?' class="r"':''}>${x}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map((x,i)=>`<td${i?' class="r"':''}>${x}</td>`).join("")}</tr>`).join("")||'<tr><td class="note">None</td></tr>'}</tbody></table></div>`;
 function offBuild(K){const e=OL.find(x=>x.k==K);if(!e)return null;const Pr=CUR.P.filter(r=>okey(r)==K),Sr=CUR.S.filter(r=>okey(r)==K);
-const km=Pr.reduce((a,r)=>a+r.dist,0),tg=Sr.filter(r=>grp(r.animal)=="t").length,days=new Set(Pr.concat(Sr).map(r=>r.date)).size,beats=new Set(Pr.concat(Sr).map(r=>r.beat)).size;
-const ym={};Pr.forEach(r=>{const k=(r.year||"")+" "+(MN[r.mi-1]||"");(ym[k]=ym[k]||{p:0,km:0,s:0}).p++;ym[k].km+=r.dist});Sr.forEach(r=>{const k=(r.year||"")+" "+(MN[r.mi-1]||"");(ym[k]=ym[k]||{p:0,km:0,s:0}).s++});
+const km=Pr.reduce((a,r)=>a+r.dist,0),tg=Sr.filter(r=>grp(r.animal)=="t").length,days=pdays(Pr),beats=new Set(Pr.concat(Sr).map(r=>r.beat)).size;
+const ym={};Pr.forEach(r=>{const k=(r.year||"")+" "+(MN[r.mi-1]||"");(ym[k]=ym[k]||{p:0,km:0,s:0,d:new Set()}).p++;ym[k].km+=r.dist;ym[k].d.add(dkey(r)||r.date)});Sr.forEach(r=>{const k=(r.year||"")+" "+(MN[r.mi-1]||"");(ym[k]=ym[k]||{p:0,km:0,s:0,d:new Set()}).s++});
 const mk=Object.keys(ym).sort((a,b)=>{const f=k=>{const[y,m]=k.split(" ");return (y||"0")+String(MN.indexOf(m)+1).padStart(2,"0")};return f(a)<f(b)?-1:1});
-const bt={};Pr.forEach(r=>{(bt[r.beat]=bt[r.beat]||{p:0,km:0,s:0}).p++;bt[r.beat].km+=r.dist});Sr.forEach(r=>{(bt[r.beat]=bt[r.beat]||{p:0,km:0,s:0}).s++});
+const bt={};Pr.forEach(r=>{(bt[r.beat]=bt[r.beat]||{p:0,km:0,s:0,d:new Set()}).p++;bt[r.beat].km+=r.dist;bt[r.beat].d.add(dkey(r)||r.date)});Sr.forEach(r=>{(bt[r.beat]=bt[r.beat]||{p:0,km:0,s:0,d:new Set()}).s++});
 const urls=[];Pr.concat(Sr).forEach(r=>kmlUrls(r.kml).forEach(u=>{if(!urls.includes(u))urls.push(u)}));
 const pl=Pr.slice().sort((a,b)=>dkey(b).localeCompare(dkey(a))).slice(0,200),sl=Sr.slice().sort((a,b)=>dkey(b).localeCompare(dkey(a))).slice(0,200);
 const h=`<div class="card" style="margin-top:14px"><div class="seg" style="justify-content:space-between"><h3 style="margin:0">${esc(e.name)}${e.desig?", "+esc(e.desig):""} <span class="note">· ${esc(e.division)} · ${esc(e.range)}</span></h3><span class="seg" style="margin:0"><button class="btn alt" id="odmap">Show on map</button><button class="btn alt" id="odx">Close</button></span></div>
-<div class="kp"><div><b>${Pr.length.toLocaleString()}</b><span>Patrols</span></div><div><b>${km.toLocaleString(undefined,{maximumFractionDigits:1})}</b><span>Kilometres walked</span></div><div><b>${Sr.length.toLocaleString()}</b><span>Observations</span></div><div><b>${tg.toLocaleString()}</b><span>Tiger signs</span></div><div><b>${beats}</b><span>Beats covered</span></div><div><b>${days}</b><span>Days active</span></div></div>
+<div class="kp"><div><b>${Pr.length.toLocaleString()}</b><span>Patrols</span></div><div><b>${km.toLocaleString(undefined,{maximumFractionDigits:1})}</b><span>Kilometres walked</span></div><div><b>${Sr.length.toLocaleString()}</b><span>Observations</span></div><div><b>${tg.toLocaleString()}</b><span>Tiger signs</span></div><div><b>${beats}</b><span>Beats covered</span></div><div><b>${days}</b><span>Patrol days</span></div></div>
 <p class="note">${urls.length?"KML links in the sheet: "+urls.map((u,i)=>'<a href="'+esc(u)+'" target="_blank" rel="noopener">KML '+(i+1)+'</a>').join(" · "):"No KML link found for this officer in the sheet."}</p>
+<div class="two" style="margin-top:12px"><div><h3>Distance walked per month (km)</h3>${svgCols(mk.map(mlab),mk.map(k=>ym[k].km),"#11452D")}</div><div><h3>Top animal sightings</h3>${svgH(cnt(Sr,r=>r.animal),"#B4452A")}</div></div>
 <div class="two" style="margin-top:12px"><div><h3>Animal-wise observations</h3>${mini(["Animal","Count"],cnt(Sr,r=>r.animal).map(([a,n])=>[esc(a),n]))}</div><div><h3>Observation type</h3>${mini(["Observation","Count"],cnt(Sr,r=>r.sign).map(([a,n])=>[esc(a),n]))}</div></div>
-<div class="two" style="margin-top:12px"><div><h3>Month-wise</h3>${mini(["Month","Patrols","Km","Observations"],mk.map(k=>[esc(k.trim()||"No date"),ym[k].p,ym[k].km.toFixed(1),ym[k].s]))}</div><div><h3>Beat-wise</h3>${mini(["Beat","Patrols","Km","Observations"],Object.entries(bt).sort((a,b)=>b[1].p+b[1].s-a[1].p-a[1].s).map(([k,v])=>[esc(k),v.p,v.km.toFixed(1),v.s]))}</div></div>
+<div class="two" style="margin-top:12px"><div><h3>Month-wise</h3>${mini(["Month","Patrols","Patrol days","Km","Observations"],mk.map(k=>[esc(k.trim()||"No date"),ym[k].p,ym[k].d.size,ym[k].km.toFixed(1),ym[k].s]))}</div><div><h3>Beat-wise</h3>${mini(["Beat","Patrols","Patrol days","Km","Observations"],Object.entries(bt).sort((a,b)=>b[1].p+b[1].s-a[1].p-a[1].s).map(([k,v])=>[esc(k),v.p,v.d.size,v.km.toFixed(1),v.s]))}</div></div>
 <div class="two" style="margin-top:12px"><div><h3>Patrol records${Pr.length>200?" (latest 200)":""}</h3>${mini(["Date","Beat","Km"],pl.map(r=>[esc(r.date),esc(r.beat),r.dist.toFixed(3)]))}</div><div><h3>Observation records${Sr.length>200?" (latest 200)":""}</h3>${mini(["Date","Animal","Observation","Age"],sl.map(r=>[esc(r.date),esc(r.animal),esc(r.sign),esc(r.age)]))}</div></div></div>`;return{e,h,urls,Pr,Sr,km}}
 function showOfficer(fresh){const b=offBuild(OFF);if(!b)return;$("#od").innerHTML=b.h;const urls=b.urls;
 $("#odx").onclick=()=>{OFF=null;$("#od").innerHTML="";KTOK++;KL=[];kmlNote("");redraw()};
@@ -329,10 +357,10 @@ if(fresh){$("#od").scrollIntoView({behavior:"smooth",block:"start"});loadKMLs(ur
 /* ---- Generate report (top menu) ---- */
 $("#rfl").innerHTML=F.map(([k,l])=>`<label class="f">${l}<select id="r_${k}"></select></label>`).join("");
 function repData(){return withPfx("r_",()=>{const P=rows.filter(r=>r.dist>0&&m(r,["animal","sign"])),S=rows.filter(r=>r.animal&&m(r));return{P,S,fl:F.map(([k,l])=>val(k)?l+": "+val(k):"").filter(Boolean).join(" | ")||"None (all records)"}})}
-function offAgg(P,S){const o=new Map(),get=r=>{const k=okey(r);let e=o.get(k);if(!e){e={k,division:r.division,range:r.range,name:r.name,desig:"",p:0,km:0,s:0};o.set(k,e)}if(r.desig&&!e.desig)e.desig=r.desig;return e};
-P.forEach(r=>{if(r.name){const e=get(r);e.p++;e.km+=r.dist}});S.forEach(r=>{if(r.name)get(r).s++});
+function offAgg(P,S){const o=new Map(),get=r=>{const k=okey(r);let e=o.get(k);if(!e){e={k,division:r.division,range:r.range,name:r.name,desig:"",p:0,km:0,s:0,d:new Set()};o.set(k,e)}if(r.desig&&!e.desig)e.desig=r.desig;return e};
+P.forEach(r=>{if(r.name){const e=get(r);e.p++;e.km+=r.dist;e.d.add(dkey(r)||r.date)}});S.forEach(r=>{if(r.name)get(r).s++});
 return[...o.values()].sort((a,b)=>a.division.localeCompare(b.division)||a.range.localeCompare(b.range)||DR(a.desig)-DR(b.desig)||a.name.localeCompare(b.name))}
-function repPreview(){const{P,S}=repData(),km=P.reduce((a,r)=>a+r.dist,0);$("#rprev").textContent=P.length.toLocaleString()+" patrols · "+km.toLocaleString(undefined,{maximumFractionDigits:1})+" km · "+S.length.toLocaleString()+" observations · "+offAgg(P,S).length+" officers"}
+function repPreview(){const{P,S}=repData(),km=P.reduce((a,r)=>a+r.dist,0);$("#rprev").textContent=P.length.toLocaleString()+" patrols · "+pdays(P).toLocaleString()+" patrol days · "+km.toLocaleString(undefined,{maximumFractionDigits:1})+" km · "+S.length.toLocaleString()+" observations · "+offAgg(P,S).length+" officers"}
 function repOpts(){withPfx("r_",()=>{options()});repPreview()}
 F.forEach(([k])=>$("#r_"+k).onchange=repOpts);
 function repFromPage(){F.forEach(([k])=>{$("#r_"+k).innerHTML="<option value=''>All</option>"});withPfx("r_",()=>options());for(let i=0;i<2;i++){F.forEach(([k])=>{const v=$("#f_"+k).value,s=$("#r_"+k);if([...s.options].some(o=>o.value==v))s.value=v});withPfx("r_",()=>options())}repPreview()}
@@ -342,23 +370,25 @@ const csvCell=v=>{v=String(v==null?"":v);return/[",\n\r]/.test(v)?'"'+v.replace(
 function dl(name,rowsArr){const b=new Blob(["﻿"+rowsArr.map(r=>r.map(csvCell).join(",")).join("\r\n")],{type:"text/csv;charset=utf-8"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
 const stamp=()=>new Date().toISOString().slice(0,10);
 $("#rxls").onclick=()=>{const{P,S,fl}=repData(),L=offAgg(P,S);let tp=0,tk=0,ts=0;
-const out=[["MStripes Field Monitoring Database – Amrabad Tiger Reserve"],["Filters: "+fl],[],["Sl.No","Division","Range","Name with designation","No of patrol","Total Patrolled in Km","No. of observations"]];
-L.forEach((e,i)=>{tp+=e.p;tk+=e.km;ts+=e.s;out.push([i+1,e.division,e.range,e.name+(e.desig?", "+e.desig:""),e.p,e.km.toFixed(1),e.s])});out.push(["","","","Total",tp,tk.toFixed(1),ts]);dl("MStripes_officer_report_"+stamp()+".csv",out)};
+const out=[["MStripes Field Monitoring Database – Amrabad Tiger Reserve"],["Filters: "+fl],[],["Sl.No","Division","Range","Name with designation","No of patrol","No of patrol days","Total Patrolled in Km","No. of observations"]];
+L.forEach((e,i)=>{tp+=e.p;tk+=e.km;ts+=e.s;out.push([i+1,e.division,e.range,e.name+(e.desig?", "+e.desig:""),e.p,e.d.size,e.km.toFixed(1),e.s])});out.push(["","","","Total",tp,pdays(P),tk.toFixed(1),ts]);dl("MStripes_officer_report_"+stamp()+".csv",out)};
 $("#rrec").onclick=()=>{const{P,S}=repData(),h=["Date","Year","Month","Division","Range","Beat","Name","Designation","Record type","Patrol distance (km)","Animal sighting","Observation","Track age","Latitude","Longitude","KML link"];
 const f=(r,ty)=>[r.date,r.year,r.month,r.division,r.range,r.beat,r.name,r.desig,ty,ty=="Patrol"?r.dist:"",r.animal,r.sign,r.age,isFinite(r.lat)?r.lat:"",isFinite(r.lon)?r.lon:"",r.kml];
 dl("MStripes_records_"+stamp()+".csv",[h].concat(P.map(r=>f(r,"Patrol")),S.map(r=>f(r,"Wildlife sign"))))};
 const gt=(h,rows,ra=[])=>`<div class="tw"><table><thead><tr>${h.map((x,i)=>`<th${ra.includes(i)?' class="r"':''}>${x}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr${r.tot?' class="tot"':''}>${r.c.map((x,i)=>`<td${ra.includes(i)?' class="r"':''}>${x}</td>`).join("")}</tr>`).join("")||'<tr><td class="note">None</td></tr>'}</tbody></table></div>`;
 $("#rpdf").onclick=()=>{const{P,S,fl}=repData(),L=offAgg(P,S),km=P.reduce((a,r)=>a+r.dist,0),tg=S.filter(r=>grp(r.animal)=="t").length;
 const w=window.open("","_blank");if(!w){alert("Please allow pop-ups for this page to generate the report.");return}
-let tp=0,tk=0,ts=0;const orows=L.map((e,i)=>{tp+=e.p;tk+=e.km;ts+=e.s;return{c:[i+1,esc(e.division),esc(e.range),esc(e.name)+(e.desig?", "+esc(e.desig):""),e.p.toLocaleString(),e.km.toFixed(1),e.s.toLocaleString()]}});orows.push({tot:1,c:["","","","Total",tp.toLocaleString(),tk.toFixed(1),ts.toLocaleString()]});
-const ym={};P.forEach(r=>{const k=(r.year||"")+" "+(MN[r.mi-1]||"");(ym[k]=ym[k]||{p:0,km:0,s:0}).p++;ym[k].km+=r.dist});S.forEach(r=>{const k=(r.year||"")+" "+(MN[r.mi-1]||"");(ym[k]=ym[k]||{p:0,km:0,s:0}).s++});
+let tp=0,tk=0,ts=0;const orows=L.map((e,i)=>{tp+=e.p;tk+=e.km;ts+=e.s;return{c:[i+1,esc(e.division),esc(e.range),esc(e.name)+(e.desig?", "+esc(e.desig):""),e.p.toLocaleString(),e.d.size,e.km.toFixed(1),e.s.toLocaleString()]}});orows.push({tot:1,c:["","","","Total",tp.toLocaleString(),pdays(P),tk.toFixed(1),ts.toLocaleString()]});
+const ym={};P.forEach(r=>{const k=(r.year||"")+" "+(MN[r.mi-1]||"");(ym[k]=ym[k]||{p:0,km:0,s:0,d:new Set()}).p++;ym[k].km+=r.dist;ym[k].d.add(dkey(r)||r.date)});S.forEach(r=>{const k=(r.year||"")+" "+(MN[r.mi-1]||"");(ym[k]=ym[k]||{p:0,km:0,s:0,d:new Set()}).s++});
 const mk=Object.keys(ym).sort((a,b)=>{const f=k=>{const[y,mo]=k.split(" ");return(y||"0")+String(MN.indexOf(mo)+1).padStart(2,"0")};return f(a)<f(b)?-1:1});
-const bt={};P.forEach(r=>{(bt[r.beat]=bt[r.beat]||{p:0,km:0,s:0}).p++;bt[r.beat].km+=r.dist});S.forEach(r=>{(bt[r.beat]=bt[r.beat]||{p:0,km:0,s:0}).s++});
+const bt={};P.forEach(r=>{(bt[r.beat]=bt[r.beat]||{p:0,km:0,s:0,d:new Set()}).p++;bt[r.beat].km+=r.dist;bt[r.beat].d.add(dkey(r)||r.date)});S.forEach(r=>{(bt[r.beat]=bt[r.beat]||{p:0,km:0,s:0,d:new Set()}).s++});
 const im=[...document.querySelectorAll("header.gov img")].slice(0,2).map(i=>`<img src="${i.src}" style="width:64px;height:64px;object-fit:contain">`).join(""),css=document.querySelector("style").textContent;
-const body=`<div class="kp"><div><b>${P.length.toLocaleString()}</b><span>Patrols</span></div><div><b>${km.toLocaleString(undefined,{maximumFractionDigits:1})}</b><span>Kilometres walked</span></div><div><b>${S.length.toLocaleString()}</b><span>Observations</span></div><div><b>${tg.toLocaleString()}</b><span>Tiger signs</span></div><div><b>${L.length}</b><span>Officers</span></div></div>
-<h3>Officer-wise report</h3>${gt(["Sl.No","Division","Range","Name with designation","No of patrol","Total Patrolled in Km","No. of observations"],orows,[4,5,6])}
+const body=`<div class="kp"><div><b>${P.length.toLocaleString()}</b><span>Patrols</span></div><div><b>${km.toLocaleString(undefined,{maximumFractionDigits:1})}</b><span>Kilometres walked</span></div><div><b>${pdays(P).toLocaleString()}</b><span>Patrol days</span></div><div><b>${S.length.toLocaleString()}</b><span>Observations</span></div><div><b>${tg.toLocaleString()}</b><span>Tiger signs</span></div><div><b>${L.length}</b><span>Officers</span></div></div>
+<h3>Officer-wise report</h3>${gt(["Sl.No","Division","Range","Name with designation","No of patrol","No of patrol days","Total Patrolled in Km","No. of observations"],orows,[4,5,6,7])}
+<h3>Charts</h3><div class="two"><div><h4 style="margin:4px 0">Distance walked per month (km)</h4>${svgCols(mk.map(mlab),mk.map(k=>ym[k].km),"#11452D")}</div><div><h4 style="margin:4px 0">Wildlife observations per month</h4>${svgCols(mk.map(mlab),mk.map(k=>ym[k].s),"#B4452A")}</div></div>
+<div class="two" style="margin-top:8px"><div><h4 style="margin:4px 0">Top animal sightings</h4>${svgH(cnt(S,r=>r.animal),"#B4452A")}</div><div><h4 style="margin:4px 0">Beats by distance walked (km)</h4>${svgH(Object.entries(bt).sort((a,b)=>b[1].km-a[1].km).map(([k,v])=>[k,v.km]),"#11452D")}</div></div>
 <div class="two" style="margin-top:12px"><div><h3>Animal-wise observations</h3>${gt(["Animal","Count"],cnt(S,r=>r.animal).map(([a,n])=>({c:[esc(a),n]})),[1])}</div><div><h3>Observation type</h3>${gt(["Observation","Count"],cnt(S,r=>r.sign).map(([a,n])=>({c:[esc(a),n]})),[1])}</div></div>
-<div class="two" style="margin-top:12px"><div><h3>Month-wise</h3>${gt(["Month","Patrols","Km","Observations"],mk.map(k=>({c:[esc(k.trim()||"No date"),ym[k].p,ym[k].km.toFixed(1),ym[k].s]})),[1,2,3])}</div><div><h3>Beat-wise</h3>${gt(["Beat","Patrols","Km","Observations"],Object.entries(bt).sort((a,b)=>b[1].km-a[1].km).map(([k,v])=>({c:[esc(k),v.p,v.km.toFixed(1),v.s]})),[1,2,3])}</div></div>`;
+<div class="two" style="margin-top:12px"><div><h3>Month-wise</h3>${gt(["Month","Patrols","Patrol days","Km","Observations"],mk.map(k=>({c:[esc(k.trim()||"No date"),ym[k].p,ym[k].d.size,ym[k].km.toFixed(1),ym[k].s]})),[1,2,3,4])}</div><div><h3>Beat-wise</h3>${gt(["Beat","Patrols","Patrol days","Km","Observations"],Object.entries(bt).sort((a,b)=>b[1].km-a[1].km).map(([k,v])=>({c:[esc(k),v.p,v.d.size,v.km.toFixed(1),v.s]})),[1,2,3,4])}</div></div>`;
 w.document.write(`<!doctype html><html data-theme="light"><head><meta charset="utf-8"><meta name="color-scheme" content="light"><title>MStripes report</title><style>${css}
 body{background:#fff;color:#16130C;margin:0;padding:18px 24px}.tw{max-height:none!important;overflow:visible!important}button{display:none!important}.rh{display:flex;align-items:center;gap:14px;border-bottom:3px solid #DAB015;padding-bottom:10px;margin-bottom:10px}.rh h1{font-size:1.25rem;margin:0;color:#11452D}.rh p{margin:2px 0;font-size:.85rem}.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media print{body{padding:0}h3{break-after:avoid}tr{break-inside:avoid}}</style></head><body>
 <div class="rh">${im}<div><h1>MStripes Field Monitoring Database</h1><p>Amrabad Tiger Reserve · Telangana Forest Department</p><p><b>Field monitoring report</b> · Generated ${new Date().toLocaleString("en-IN")}</p><p>Filters applied: ${esc(fl)}</p></div></div>${body}
@@ -373,7 +403,7 @@ $("#cSpec").innerHTML=d.map(([a,n])=>`<div class="row"><span class="lb" title="$
 function render(){pg=0;options();chips();
 const P=rows.filter(r=>r.dist>0&&m(r,["animal","sign"])),S=rows.filter(r=>r.animal&&m(r));
 const km=P.reduce((a,r)=>a+r.dist,0),tg=S.filter(r=>grp(r.animal)=="t").length;
-$("#stats").innerHTML=[[P.length.toLocaleString(),"Patrols"],[km.toLocaleString(undefined,{maximumFractionDigits:1}),"Kilometres walked"],[S.length.toLocaleString(),"Wildlife signs"],[tg.toLocaleString(),"Tiger signs","t"],[new Set(P.map(r=>r.name)).size,"Officers on patrol"],[new Set(P.map(r=>r.beat)).size,"Beats covered"]].map(([a,b,c])=>`<div class="stat ${c||""}"><b>${a}</b><span>${b}</span></div>`).join("");
+$("#stats").innerHTML=[[P.length.toLocaleString(),"Patrols"],[pdays(P).toLocaleString(),"Patrol days"],[km.toLocaleString(undefined,{maximumFractionDigits:1}),"Kilometres walked"],[S.length.toLocaleString(),"Wildlife signs"],[tg.toLocaleString(),"Tiger signs","t"],[new Set(P.map(r=>r.name)).size,"Officers on patrol"],[new Set(P.map(r=>r.beat)).size,"Beats covered"]].map(([a,b,c])=>`<div class="stat ${c||""}"><b>${a}</b><span>${b}</span></div>`).join("");
 drawMap(S);trends(P,S);bars("#bStaff",sum(P,r=>r.name+(r.desig?", "+r.desig:"")));bars("#bBeat",sum(P,r=>r.beat));
 CUR={S:S,P:P,A:rows.filter(r=>r.animal?m(r):(r.dist>0&&m(r,["animal","sign"])))};renderTable();officers(P,S)}
 function rowHtml(r){const sg=!!r.animal;let c=[esc(r.date)];
@@ -402,8 +432,8 @@ $("#file").onchange=e=>{const f=e.target.files[0];if(!f)return;const rd=new File
 $("#up").onkeydown=e=>{if(e.key=="Enter"||e.key==" "){e.preventDefault();$("#file").click()}};
 render();
 /* ---- Live sync with Google Sheet ---- */
-const BUILD="v18 · 18 Nov 2026",SHEET_ID="1TYnTFCx0BiQYlaupeiTu2tK5TpNIPA4FTTgSgzCbVHA",GID="0",REFRESH_HOURS=24;
-const PUB_URL="https://docs.google.com/spreadsheets/d/e/2PACX-1vT_-qn3XCA-eJkPGThRZBns84mn5w7kHoFeOkAXJ4DUS04hDfHwBn1fZ-l39aXnFDKVG4xBBogIW4So/pub?gid=0&single=true&output=csv";
+const BUILD="v20 · 18 Nov 2026",SHEET_ID="1TYnTFCx0BiQYlaupeiTu2tK5TpNIPA4FTTgSgzCbVHA",GID="0",REFRESH_HOURS=24;
+const PUB_URL="https://docs.google.com/spreadsheets/d/e/2PACX-1vT_-qn3XCA-eJkPGThRZBns84mn5w7kHoFeOkAXJ4DUS04hDfHwBn1fZ-l39aXnFDKVG4xBBogIW4So/pub?output=csv";
 const SOURCES=[["published link",PUB_URL],["sheet export","https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/export?format=csv&gid="+GID],["sheet query","https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/gviz/tq?tqx=out:csv&headers=1&gid="+GID]].filter(s=>s[1]);
 let busy=false,loaded=false;
 async function getText(u,label){const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),240000);
