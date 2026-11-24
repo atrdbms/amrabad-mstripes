@@ -35,7 +35,7 @@ section{padding-top:28px}
 .card{background:var(--surf);border:1px solid var(--line);border-radius:4px;padding:16px}
 .fgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 label.f{font-size:.82rem;font-weight:600;color:var(--mut);display:block}
-select{display:block;width:100%;margin-top:4px;font:inherit;font-weight:400;color:var(--tx);background:var(--surf);border:1px solid var(--line);border-radius:3px;padding:8px}
+select,input[type=search]{display:block;width:100%;margin-top:4px;font:inherit;font-weight:400;color:var(--tx);background:var(--surf);border:1px solid var(--line);border-radius:3px;padding:8px}
 .frow{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}
 .btn{font:600 .88rem "Noto Sans",sans-serif;background:var(--green);color:#fff;border:0;border-radius:3px;padding:9px 16px;cursor:pointer}
 .btn.alt{background:transparent;color:var(--green);border:1px solid var(--green)}
@@ -192,15 +192,16 @@ const dv=pd(g("month"))||pd(g("date"))||{y:"",mo:0},mi=dv.mo>=1&&dv.mo<=12?dv.mo
 return{year:dv.y,month:MN[mi-1]||"",mi,division:g("division"),range:g("range"),name:g("name"),desig:g("desig"),otype:(()=>{const d=g("desig").replace(/[^a-z]/gi,"").toUpperCase(),nm=g("name");return /^(FRO|DYRO|FSO|FBO)$/.test(d)?"Regular":(d||nm)?"Others":""})(),beat:g("beat"),dist:parseFloat(g("dist"))||0,date:g("date"),lon:parseFloat(g("lon")),lat:parseFloat(g("lat")),animal:g("animal"),sign:g("sign"),age:g("age"),kml:g("kml")}})}
 let rows=[],view="A",pg=0,CUR={A:[],S:[],P:[]},MP=[];
 const F=[["year","Year"],["month","Month"],["division","Division"],["range","Range"],["beat","Beat"],["otype","Officer type"],["name","Name"],["animal","Animal sighting"],["sign","Observation"]];
-$("#fl").innerHTML=F.map(([k,l])=>`<label class="f">${l}<select id="f_${k}"></select></label>`).join("");
+$("#fl").innerHTML=F.map(([k,l])=>`<label class="f">${l}<select id="f_${k}"></select></label>`).join("")+`<label class="f">Search name<input type="search" id="f_nq" placeholder="Type part of a name" autocomplete="off"></label>`;
 let PFX="f_";const val=k=>$("#"+PFX+k).value,withPfx=(p,fn)=>{const o=PFX;PFX=p;try{return fn()}finally{PFX=o}};
-const m=(r,skip=[])=>F.every(([k])=>skip.includes(k)||!val(k)||r[k]==val(k));
+const NQ=()=>PFX=="f_"?(($("#f_nq")||{}).value||"").trim().toLowerCase():"";
+const m=(r,skip=[])=>{const q=NQ();return(!q||String(r.name||"").toLowerCase().includes(q))&&F.every(([k])=>skip.includes(k)||!val(k)||r[k]==val(k))};
 const grp=a=>/tiger/i.test(a)?"t":/dhole|wild dog|jungle|leopard|hyena|sloth|bear|fox|jackal/i.test(a)?"c":"p";
 const sum=(a,k)=>{const o={},d={};a.forEach(x=>{const g=k(x);o[g]=(o[g]||0)+x.dist;(d[g]=d[g]||new Set()).add(dkey(x)||x.date)});return Object.entries(o).map(([g,v])=>[g,v,d[g].size]).sort((a,b)=>b[1]-a[1])};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const DR=d=>{const i=["FRO","DYRO","FSO","FBO"].indexOf((d||"").replace(/[^a-z]/gi,"").toUpperCase());return i<0?9:i};
 function options(){F.forEach(([k,l])=>{const cur=val(k),u=new Map();
-const dg={};rows.forEach(r=>{if(r[k]&&m(r,[k])){u.set(r[k],r.mi||0);if(k=="name"&&r.desig&&!dg[r.name])dg[r.name]=r.desig}});
+const dg={};rows.forEach(r=>{if(r[k]&&m(r,[k])&&(k!="name"||!NQ()||String(r.name).toLowerCase().includes(NQ()))){u.set(r[k],r.mi||0);if(k=="name"&&r.desig&&!dg[r.name])dg[r.name]=r.desig}});
 let v=[...u.keys()];v=k=="month"?v.sort((a,b)=>u.get(a)-u.get(b)):k=="otype"?v.sort().reverse():k=="name"?v.sort((a,b)=>DR(dg[a])-DR(dg[b])||a.localeCompare(b)):k=="year"?v.sort().reverse():v.sort();
 $("#"+PFX+k).innerHTML=`<option value="">All</option>`+v.map(x=>`<option value="${esc(x)}">${esc(x)}${dg[x]?", "+esc(dg[x]):""}</option>`).join("");$("#"+PFX+k).value=v.includes(cur)?cur:""})}
 function bars(el,d){const mx=d[0]?d[0][1]:1;$(el).innerHTML=d.slice(0,10).map(([k,v,dd])=>`<div class="row"><span class="lb" title="${esc(k)}">${esc(k)}</span><div class="track"><div class="fill" style="width:${v/mx*100}%"></div></div><span class="v" style="white-space:nowrap">${v.toFixed(1)} km · ${dd} d</span></div>`).join("")||'<p class="note">No patrols match these filters.</p>'}
@@ -445,8 +446,8 @@ $("#pinfo").textContent=n?"Showing "+(pg*PS+1).toLocaleString()+"–"+Math.min(n
 $("#pv").disabled=pg<=0;$("#pn").disabled=pg>=pages-1;$("#mapnote").textContent=""}
 $("#pv").onclick=()=>{pg--;renderTable()};$("#pn").onclick=()=>{pg++;renderTable()};
 
-$("#fl").onchange=render;
-$("#reset").onclick=()=>{F.forEach(([k])=>$("#f_"+k).value="");render()};
+$("#fl").onchange=render;$("#f_nq").oninput=render;
+$("#reset").onclick=()=>{F.forEach(([k])=>$("#f_"+k).value="");$("#f_nq").value="";render()};
 ["A","S","P","M"].forEach(k=>$("#v"+k).onclick=()=>{view=k;pg=0;renderTable()});
 /* ---- Range maps: month folders in Google Drive (read through the Apps Script address) ---- */
 const RANGES=["achampet","lingal","kollapur","nagarkurnool","amrabad","mannanur","domalapenta","maddimadugu","nagarjunasagar","kambalapally","devarakonda"],RALIAS={nsagar:"nagarjunasagar",sagar:"nagarjunasagar",nagarjuna:"nagarjunasagar"};
@@ -474,7 +475,7 @@ async function loadMaps(){try{if(!KML_PROXY)throw new Error("no Apps Script addr
 const st=$("#status");st.textContent="Connecting to Google Sheet…";
 render();
 /* ---- Live sync with Google Sheet ---- */
-const BUILD="v31 · 18 Nov 2026",SHEET_ID="1TYnTFCx0BiQYlaupeiTu2tK5TpNIPA4FTTgSgzCbVHA",GID="0",REFRESH_HOURS=24;
+const BUILD="v32 · 18 Nov 2026",SHEET_ID="1TYnTFCx0BiQYlaupeiTu2tK5TpNIPA4FTTgSgzCbVHA",GID="0",REFRESH_HOURS=24;
 const PUB_URL="https://docs.google.com/spreadsheets/d/e/2PACX-1vT_-qn3XCA-eJkPGThRZBns84mn5w7kHoFeOkAXJ4DUS04hDfHwBn1fZ-l39aXnFDKVG4xBBogIW4So/pub?output=csv";
 const SOURCES=[["published link",PUB_URL],["sheet export","https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/export?format=csv&gid="+GID],["sheet query","https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/gviz/tq?tqx=out:csv&headers=1&gid="+GID]].filter(s=>s[1]);
 let busy=false,loaded=false;
